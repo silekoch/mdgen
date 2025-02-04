@@ -30,18 +30,18 @@ gsutil -m rsync -r gs://mdgen-public/4AA_sims_implicit data/4AA_sims_implicit
 3. Preprocess the tetrapeptide simulations
 ```
 # Forward simulation and TPS, prep with interval 100 * 100fs = 10ps
-python -m scripts.prep_sims --splits splits/4AA.csv --sim_dir data/4AA_sims --outdir data/4AA_data --num_workers [N] --suffix _i100 --stride 100
+python -m scripts.prep_sims --split splits/4AA.csv --sim_dir data/4AA_sims --outdir data/4AA_data --num_workers [N] --suffix _i100 --stride 100
 
 # Upsampling, prep with interval 100fs
-python -m scripts.prep_sims --splits splits/4AA_implicit.csv --sim_dir data/4AA_sims_implicit --outdir data/4AA_data_implicit --num_workers [N]
+python -m scripts.prep_sims --split splits/4AA_implicit.csv --sim_dir data/4AA_sims_implicit --outdir data/4AA_data_implicit --num_workers [N]
 
 # Inpainting, prep with interval 100fs 
-python -m scripts.prep_sims --splits splits/4AA.csv --sim_dir data/4AA_sims --outdir data/4AA_data --num_workers [N]
+python -m scripts.prep_sims --split splits/4AA.csv --sim_dir data/4AA_sims --outdir data/4AA_data --num_workers [N]
 ```
 4. Preprocess the ATLAS simulations
 ```
 # Prep with interval 40 * 10 ps = 400 ps
-python -m scripts.prep_sims --splits splits/atlas.csv --sim_dir data/atlas_sims --outdir data/atlas_data --num_workers [N] --suffix _i40 --stride 40
+python -m scripts.prep_sims --split splits/atlas.csv --sim_dir data/atlas_sims --outdir data/atlas_data --num_workers [N] --suffix _i40 --stride 40
 ```
 
 ## Training
