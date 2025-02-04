@@ -23,9 +23,15 @@ names = df.index
 
 def main():
     jobs = []
+    n_not_found = 0
     for name in names:
         if os.path.exists(f'{args.outdir}/{name}{args.suffix}.npy'): continue
+        if not os.path.exists(f'{args.sim_dir}/{name}'):
+            n_not_found += 1
+            continue
         jobs.append(name)
+    print(f'Did not find {n_not_found} of the {len(names)} simulations'
+          f'specified in the split. Skipping those ...')
 
     if args.num_workers > 1:
         p = Pool(args.num_workers)
