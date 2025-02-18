@@ -76,7 +76,7 @@ def one_hot(x, v_bins):
     return nn.functional.one_hot(am, num_classes=len(v_bins)).float()
 
 
-def batched_gather(data, inds, dim=0, no_batch_dims=0):
+def batched_gather(data: torch.Tensor, inds: torch.Tensor, dim=0, no_batch_dims=0):
     ranges = []
     for i, s in enumerate(data.shape[:no_batch_dims]):
         r = torch.arange(s)
