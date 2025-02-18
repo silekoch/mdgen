@@ -80,10 +80,10 @@ wget https://storage.googleapis.com/mdgen-public/weights/atlas.ckpt
 Commands similar to these were used to obtain the samples analyzed in the paper.
 ```
 # Forward simulation
-python sim_inference.py --sim_ckpt forward_sim.ckpt --data_dir share/4AA_sims --split splits/4AA_test.csv --num_rollouts 10 --num_frames 1000 --xtc --out_dir [DIR]
+python sim_inference.py --sim_ckpt forward_sim.ckpt --data_dir data/4AA_data --split splits/4AA_test.csv --num_rollouts 10 --num_frames 1000 --xtc --suffix _i100 --out_dir [DIR]
 
 # Interpolation / TPS
-python tps_inference.py --sim_ckpt interpolation.ckpt --data_dir share/4AA_sims --split splits/4AA_test.csv --num_frames 100 --suffix _i100 --mddir data/4AA_sims  --out_dir /data/cb/scratch/share/results/0506_tps_1ns 
+python tps_inference.py --sim_ckpt interpolation.ckpt --data_dir data/4AA_data --split splits/4AA_test.csv --num_frames 100 --suffix _i100 --mddir data/4AA_sims  --out_dir [DIR] 
 
 # Upsampling 
 python upsampling_inference.py --ckpt upsampling.ckpt --split splits/4AA_implicit_test.csv --out_dir outpdb/0505_100ps_upsampling_3139 --batch_size 10 --xtc --out_dir [DIR]
