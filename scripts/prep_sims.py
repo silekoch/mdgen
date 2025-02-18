@@ -30,7 +30,7 @@ def main():
             n_not_found += 1
             continue
         jobs.append(name)
-    print(f'Did not find {n_not_found} of the {len(names)} simulations'
+    print(f'Did not find {n_not_found}/{len(names)} simulations '
           f'specified in the split. Skipping those ...')
 
     if args.num_workers > 1:
