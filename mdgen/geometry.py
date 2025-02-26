@@ -6,42 +6,50 @@ from . import residue_constants as rc
 from .tensor_utils import batched_gather
 
 
-def atom14_to_atom37(atom14: np.ndarray, aatype, atom14_mask=None):
+def atom14_to_atom37(atom14: np.ndarray | torch.Tensor, aatype, atom14_mask=None) -> np.ndarray:
+    if type(atom14) is np.ndarray:
+        atom14 = torch.from_numpy(atom14)
+    if type(atom14_mask) is np.ndarray:
+        atom14_mask = torch.from_numpy(atom14_mask)
     atom37 = batched_gather(
         atom14,
-        rc.RESTYPE_ATOM37_TO_ATOM14[aatype],
+        torch.from_numpy(rc.RESTYPE_ATOM37_TO_ATOM14[aatype]),
         dim=-2,
         no_batch_dims=len(atom14.shape[:-2]),
-    )
+    ).numpy()
     atom37 *= rc.RESTYPE_ATOM37_MASK[aatype, :, None]
     if atom14_mask is not None:
         atom37_mask = batched_gather(
             atom14_mask,
-            rc.RESTYPE_ATOM37_TO_ATOM14[aatype],
+            torch.from_numpy(rc.RESTYPE_ATOM37_TO_ATOM14[aatype]),
             dim=-1,
             no_batch_dims=len(atom14.shape[:-2]),
-        )
+        ).numpy()
         atom37_mask *= rc.RESTYPE_ATOM37_MASK[aatype]
         return atom37, atom37_mask
     else:
         return atom37
 
 
-def atom37_to_atom14(atom37: np.ndarray, aatype, atom37_mask=None):
+def atom37_to_atom14(atom37: np.ndarray | torch.Tensor, aatype, atom37_mask=None) -> np.ndarray:
+    if type(atom37) is np.ndarray:
+        atom37 = torch.from_numpy(atom37)
+    if type(atom37_mask) is np.ndarray:
+        atom37_mask = torch.from_numpy(atom37_mask)
     atom14 = batched_gather(
         atom37,
-        rc.RESTYPE_ATOM14_TO_ATOM37[aatype],
+        torch.from_numpy(rc.RESTYPE_ATOM14_TO_ATOM37[aatype]),
         dim=-2,
         no_batch_dims=len(atom37.shape[:-2]),
-    )
+    ).numpy()
     atom14 *= rc.RESTYPE_ATOM14_MASK[aatype, :, None]
     if atom37_mask is not None:
         atom14_mask = batched_gather(
             atom37_mask,
-            rc.RESTYPE_ATOM14_TO_ATOM37[aatype],
+            torch.from_numpy(rc.RESTYPE_ATOM14_TO_ATOM37[aatype]),
             dim=-1,
             no_batch_dims=len(atom37.shape[:-2]),
-        )
+        ).numpy()
         atom14_mask *= rc.RESTYPE_ATOM14_MASK[aatype]
         return atom14, atom14_mask
     else:
