@@ -86,7 +86,7 @@ python sim_inference.py --sim_ckpt forward_sim.ckpt --data_dir data/4AA_data --s
 python tps_inference.py --sim_ckpt interpolation.ckpt --data_dir data/4AA_data --split splits/4AA_test.csv --num_frames 100 --suffix _i100 --mddir data/4AA_sims  --out_dir [DIR] 
 
 # Upsampling 
-python upsampling_inference.py --ckpt upsampling.ckpt --split splits/4AA_implicit_test.csv --out_dir outpdb/0505_100ps_upsampling_3139 --batch_size 10 --xtc --out_dir [DIR]
+python upsampling_inference.py --ckpt upsampling.ckpt --data_dir data/4AA_data_implicit --split splits/4AA_implicit_test.csv --batch_size 10 --out_dir [DIR]
 
 # Inpainting / design for high flux transitions
 python design_inference.py --sim_ckpt inpainting.ckpt --split splits/4AA_test.csv --data_dir data/4AA_data/ --num_frames 100 --mddir data/4AA_sims --random_start_idx --out_dir [DIR] 
