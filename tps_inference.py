@@ -177,8 +177,6 @@ def main():
     print(f'RUN NUMBER: {args.chunk_idx}, PROCESSING IDXS {args.chunk_idx * len(chunk)}-{(args.chunk_idx + 1) * len(chunk)}')
     print('#' * 20)
     for name in tqdm.tqdm(chunk, desc='num peptides'):
-        if args.pdb_id and name not in args.pdb_id:
-            continue
         do(model, name, df.seqres[name])
 
 
