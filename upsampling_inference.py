@@ -2,7 +2,7 @@ import argparse
 parser = argparse.ArgumentParser()
 parser.add_argument('--ckpt', type=str, default=None, required=True)
 parser.add_argument('--data_dir', type=str, default=None, required=True)
-parser.add_argument('--suffix', type=str, default='_i100')
+parser.add_argument('--suffix', type=str, default='')
 parser.add_argument('--pdb_id', nargs='*', default=[])
 parser.add_argument('--batch_size', type=int, default=1)
 parser.add_argument('--out_dir', type=str, default=".")
