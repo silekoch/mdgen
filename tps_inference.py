@@ -157,7 +157,20 @@ def main():
     df = pd.read_csv(args.split, index_col='name')
     names = np.array(df.index)
 
-    chunks = np.array_split(names, args.n_chunks)
+    jobs = []
+    n_expected = len(names) if not args.pdb_id else len(args.pdb_id)
+    for name in names:
+        if args.pdb_id and name not in args.pdb_id:
+            continue
+        if not os.path.exists(f'{args.data_dir}/{name}{args.suffix}.npy'):
+            continue
+        jobs.append(name)
+    n_not_found = n_expected - len(jobs)
+    if n_not_found:
+        print(f'Did not find {n_not_found}/{n_expected} molecules '
+              f'specified in the split. Skipping those ...')
+
+    chunks = np.array_split(jobs, args.n_chunks)
     chunk = chunks[args.chunk_idx]
     print('#' * 20)
     print(f'RUN NUMBER: {args.chunk_idx}, PROCESSING IDXS {args.chunk_idx * len(chunk)}-{(args.chunk_idx + 1) * len(chunk)}')
