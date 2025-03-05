@@ -24,6 +24,7 @@ from mdgen.tensor_utils import tensor_tree_map
 
 from mdgen.residue_constants import restype_order
 from mdgen.wrapper import NewMDGenWrapper
+from mdgen.utils import atom14_to_pdb
 from mdgen.dataset import atom14_to_frames
 import pandas as pd
 import contextlib
