@@ -25,7 +25,7 @@ os.makedirs(args.out_dir, exist_ok=True)
 
 
 
-def get_batch(name, seqres, num_frames):
+def get_batch(name, seqres):
     arr = np.lib.format.open_memmap(f'{args.data_dir}/{name}{args.suffix}.npy', 'r')
     arr = np.copy(arr).astype(np.float32)
 
@@ -67,7 +67,7 @@ def split_batch(item, num_frames=1000, cond_interval=100):
     
 def do(model, name, seqres):
 
-    item = get_batch(name, seqres, num_frames = model.args.num_frames)
+    item = get_batch(name, seqres)
     
     items = split_batch(item, num_frames=model.args.num_frames, cond_interval=model.args.cond_interval)
     
