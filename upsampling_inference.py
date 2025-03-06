@@ -7,6 +7,7 @@ parser.add_argument('--pdb_id', nargs='*', default=[])
 parser.add_argument('--batch_size', type=int, default=1)
 parser.add_argument('--out_dir', type=str, default=".")
 parser.add_argument('--split', type=str, default='splits/4AA_implicit_test.csv')
+parser.add_argument('--hparams_file', type=str, default=None)
 args = parser.parse_args()
 
 import os, torch, mdtraj, tqdm
@@ -91,7 +92,7 @@ def do(model, name, seqres):
 
 @torch.no_grad()
 def main():
-    model = NewMDGenWrapper.load_from_checkpoint(args.ckpt)
+    model = NewMDGenWrapper.load_from_checkpoint(args.ckpt, hparams_file=args.hparams_file)
     model.eval().to('cuda')
     df = pd.read_csv(args.split, index_col='name')
     names = np.array(df.index)
