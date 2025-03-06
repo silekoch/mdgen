@@ -7,6 +7,7 @@ parser.add_argument('--outdir', type=str, default='./data_atlas')
 parser.add_argument('--num_workers', type=int, default=1)
 parser.add_argument('--suffix', type=str, default='')
 parser.add_argument('--atlas', action='store_true')
+parser.add_argument('--cutoff', type=int, default=None)
 parser.add_argument('--stride', type=int, default=1)
 args = parser.parse_args()
 
@@ -80,7 +81,7 @@ else:
         traj = mdtraj.load(f'{args.sim_dir}/{name}/{name}.xtc', top=f'{args.sim_dir}/{name}/{name}.pdb')
         traj.superpose(traj)
         arr = traj_to_atom14(traj)
-        np.save(f'{args.outdir}/{name}{args.suffix}.npy', arr[::args.stride])
+        np.save(f'{args.outdir}/{name}{args.suffix}.npy', arr[:args.cutoff:args.stride])
 
 if __name__ == "__main__":
     main()
