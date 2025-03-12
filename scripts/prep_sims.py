@@ -75,7 +75,7 @@ if args.atlas:
             traj.atom_slice([a.index for a in traj.top.atoms if a.element.symbol != 'H'], True)
             traj.superpose(traj)
             arr = traj_to_atom14(traj)
-            np.save(f'{args.outdir}/{name}_R{i}{args.suffix}.npy', arr[::args.stride])
+            np.save(f'{args.outdir}/{name}_R{i}{args.suffix}.npy', arr[:args.cutoff:args.stride])
 else:
     def do_job(name):
         traj = mdtraj.load(f'{args.sim_dir}/{name}/{name}.xtc', top=f'{args.sim_dir}/{name}/{name}.pdb')
