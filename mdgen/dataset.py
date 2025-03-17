@@ -1,3 +1,4 @@
+import os
 import torch
 from .rigid_utils import Rigid
 from .residue_constants import restype_order
@@ -8,9 +9,21 @@ from .geometry import atom37_to_torsions, atom14_to_atom37, atom14_to_frames
 class MDGenDataset(torch.utils.data.Dataset):
     def __init__(self, args, split, repeat=1):
         super().__init__()
-        self.df = pd.read_csv(split, index_col='name')
         self.args = args
         self.repeat = repeat
+
+        # Load the dataset and filter missing files
+        df = pd.read_csv(split, index_col='name')
+        self.valid_names = []
+
+        for name in df.index:
+            full_name = f"{name}_R1" if args.atlas else name  # For ATLAS we only check one replica and assume the rest are there
+            file_path = f"{args.data_dir}/{full_name}{args.suffix}.npy"
+            if os.path.exists(file_path):
+                self.valid_names.append(name)
+
+        self.df = df.loc[self.valid_names]
+
     def __len__(self):
         if self.args.overfit_peptide:
             return 1000
