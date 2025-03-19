@@ -274,7 +274,6 @@ class LatentMDGenModel(nn.Module):
                     x_discrete >= 0).all():
                 print(
                     f'WARNING: xt.min(): {x_discrete.min()}. Some values of xt do not lie on the simplex. There are '
-                    f'we are '
                     f'{(x_discrete < 0).sum()} negative values in xt of shape {x_discrete.shape} that are negative. '
                     f'We are projecting '
                     f'them onto the simplex.')
