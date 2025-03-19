@@ -12,7 +12,7 @@ class Rank(logging.Filter):
 def get_logger(name):
     logger = logging.Logger(name)
     # logger.addFilter(Rank())
-    level = {"crititical": 50, "error": 40, "warning": 30, "info": 20, "debug": 10}[
+    level = {"critical": 50, "error": 40, "warning": 30, "info": 20, "debug": 10}[
         os.environ.get("LOGGER_LEVEL", "info")
     ]
     logger.setLevel(level)
