@@ -32,6 +32,7 @@ def parse_train_args():
     group.add_argument("--ckpt_freq", type=int, default=1)
     group.add_argument("--wandb", action="store_true")
     group.add_argument("--run_name", type=str, default="default")
+    group.add_argument("--progress_bar", action='store_true')
     
 
     ## Optimization settings
