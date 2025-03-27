@@ -7,9 +7,7 @@ from tqdm import tqdm
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--mddir', type=str, default='share/4AA_sims')
-parser.add_argument('--data_dir', type=str, default='share/4AA_sims_replica')
 parser.add_argument('--pdbdir', type=str, required=True)
-parser.add_argument('--split', type=str, default='splits/4AA_test.csv') 
 args = parser.parse_args()
 
 
