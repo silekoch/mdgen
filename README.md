@@ -110,10 +110,10 @@ python -m scripts.analyze_peptide_sim --mddir data/4AA_sims --pdbdir [DIR] --plo
 python -m scripts.analyze_peptide_tps --mddir data/4AA_sims  --pdbdir [DIR] --plot --save --num_workers 1 --outdir [DIR]
 
 # Upsampling
-python -m scripts.analyze_upsampling --mddir data/4AA_sims_implicit --pdbdir [DIR] --plot --save --num_workers 1
+python -m scripts.analyze_upsampling --mddir data/4AA_sims_implicit --pdbdir [DIR]
 
 # Inpainting / design
-python -m scripts.analyze_peptide_design --mddir data/4AA_sims --data_dir data/4AA_data --pdbdir [DIR]
+python -m scripts.analyze_peptide_design --mddir data/4AA_sims --pdbdir [DIR]
 ```
 To analyze the ATLAS rollouts, follow the instructions at https://github.com/bjing2016/alphaflow?tab=readme-ov-file#Evaluation-scripts.
 
