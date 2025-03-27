@@ -107,7 +107,7 @@ We run analysis scripts that produce a pickle file in each sample directory.
 python -m scripts.analyze_peptide_sim --mddir data/4AA_sims --pdbdir [DIR] --plot --save --num_workers 1
 
 # Interpolation / TPS
-python -m scripts.analyze_peptide_tps --mddir data/4AA_sims --data_dir data/4AA_sims  --pdbdir [DIR] --plot --save --num_workers 1 --outdir [DIR]
+python -m scripts.analyze_peptide_tps --mddir data/4AA_sims  --pdbdir [DIR] --plot --save --num_workers 1 --outdir [DIR]
 
 # Upsampling
 python -m scripts.analyze_upsampling --mddir data/4AA_sims_implicit --pdbdir [DIR] --plot --save --num_workers 1
