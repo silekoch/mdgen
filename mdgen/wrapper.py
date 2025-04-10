@@ -334,6 +334,27 @@ class NewMDGenWrapper(Wrapper):
         loss_mask = torch.cat([frame_loss_mask, torsion_loss_mask], -1)
         loss_mask = loss_mask.unsqueeze(1).expand(-1, T, -1, -1)
 
+        if self.args.supervise_translations_only:
+            B, T, L, D = latents.shape # D is latent_dim (e.g., 21 or 28)
+            new_loss_mask = torch.zeros_like(latents)
+
+            # Assuming standard 7D frame + 14D torsion = 21D latent
+            translation_indices = [4, 5, 6] 
+
+            # If using TPS/inpainting (14D frame + 14D torsion = 28D latent):
+            if self.args.tps_condition or self.args.inpainting or self.args.dynamic_mpnn:
+                translation_indices = [4, 5, 6, 11, 12, 13]
+
+            # Use original residue mask from batch['mask'] to mask out non-existent residues
+            residue_mask = batch['mask'].unsqueeze(1).unsqueeze(-1).expand(B, T, L, 1) # B, T, L, 1
+
+            # Set mask=1 only for translation dimensions and existing residues
+            new_loss_mask[..., translation_indices] = 1.0
+            new_loss_mask = new_loss_mask * residue_mask
+
+            # Replace original loss_mask with the new one
+            loss_mask = new_loss_mask
+
         ########
         cond_mask = torch.zeros(B, T, L, dtype=int, device=offsets.device)
         if self.args.sim_condition:
