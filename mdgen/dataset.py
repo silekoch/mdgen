@@ -67,7 +67,16 @@ class MDGenDataset(torch.utils.data.Dataset):
         
         L = frames.shape[1]
         mask = np.ones(L, dtype=np.float32)
-        
+
+        if self.args.translations_only:
+            return {
+                'name': full_name,
+                'frame_start': frame_start,
+                'trans': frames._trans,
+                'seqres': seqres,
+                'mask': mask, # (L,)
+            }
+
         if self.args.no_frames:
             return {
                 'name': full_name,

@@ -74,6 +74,7 @@ def parse_train_args():
     group = parser.add_argument_group("Ablations settings")
     group.add_argument('--no_offsets', action='store_true')
     group.add_argument('--no_frames', action='store_true')
+    group.add_argument('--translations_only', action='store_true')
     
     
     ## Model settings
