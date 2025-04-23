@@ -316,7 +316,7 @@ class LatentMDGenModel(nn.Module):
             return torch.cat([latent_continuous, flow], -1)
 
 
-class AttentionWithRoPE(nn.Module):
+class Attention(nn.Module):
     def __init__(self, *args, **kwargs):
         super().__init__()
         self.attn = MultiheadAttention(*args, **kwargs)
@@ -350,7 +350,7 @@ class IPALayer(nn.Module):
         self.ipa_norm = nn.LayerNorm(self.embed_dim)
         self.ipa = InvariantPointAttention(**ipa_args)
 
-        self.mha_l = AttentionWithRoPE(
+        self.mha_l = Attention(
             self.embed_dim,
             self.mha_heads,
             add_bias_kv=add_bias_kv,
@@ -419,7 +419,7 @@ class LatentMDGenLayer(nn.Module):
             )
 
         else:
-            self.mha_t = AttentionWithRoPE(
+            self.mha_t = Attention(
                 self.embed_dim,
                 self.mha_heads,
                 add_bias_kv=add_bias_kv,
@@ -427,7 +427,7 @@ class LatentMDGenLayer(nn.Module):
                 use_rotary_embeddings=self.use_rotary_embeddings,
             )
 
-        self.mha_l = AttentionWithRoPE(
+        self.mha_l = Attention(
             self.embed_dim,
             self.mha_heads,
             add_bias_kv=add_bias_kv,
