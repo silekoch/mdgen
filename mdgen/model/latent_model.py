@@ -94,6 +94,7 @@ class LatentMDGenModel(nn.Module):
                     mha_heads=args.mha_heads,
                     dropout=args.dropout,
                     hyena=args.hyena,
+                    bottleneck_attention=args.bottleneck_attention,
                     num_frames=args.num_frames,
                     use_rotary_embeddings=not args.no_rope,
                     deactivate_pos_rope=args.no_rope_in_pos,
@@ -324,8 +325,89 @@ class Attention(nn.Module):
 
     def forward(self, x, mask):
         x = x.transpose(0, 1)
-        x, _ = self.attn(query=x, key=x, value=x, key_padding_mask=1 - mask)
+        key_padding_mask = 1 - mask if mask is not None else None
+        x, _ = self.attn(query=x, key=x, value=x, key_padding_mask=key_padding_mask)
         x = x.transpose(0, 1)
+        return x
+
+
+class CrossAttention(nn.Module):
+    def __init__(self, *args, **kwargs):
+        super().__init__()
+        self.attn = MultiheadAttention(*args, **kwargs)
+
+    def forward(self, x, y, mask):
+        x = x.transpose(0, 1)
+        y = y.transpose(0, 1)
+        key_padding_mask = 1 - mask if mask is not None else None
+        x, _ = self.attn(query=x, key=y, value=y, key_padding_mask=key_padding_mask)
+        x = x.transpose(0, 1)
+        return x
+
+
+class BottleneckAttention(nn.Module):
+    def __init__(self, num_latents, embed_dim, ffn_embed_dim, mha_heads, elementwise_affine=False, *args, **kwargs):
+        super().__init__()
+        self.num_latents = num_latents
+        self.embed_dim = embed_dim
+        self.mha_heads = mha_heads
+        self.ffn_embed_dim = ffn_embed_dim
+
+        self.latent_vectors = nn.Parameter(torch.empty(num_latents, self.embed_dim))
+        nn.init.xavier_uniform_(self.latent_vectors)
+
+        # Collect:
+        # The latents attend to the input sequence
+        # Latents are Q, Sequence are K, V
+        self.in_norm_lat = nn.LayerNorm(self.embed_dim, elementwise_affine=elementwise_affine, eps=1e-6)
+        self.norm_seq = nn.LayerNorm(self.embed_dim, elementwise_affine=elementwise_affine, eps=1e-6)
+        self.in_attn = CrossAttention(self.embed_dim, self.mha_heads, *args, **kwargs)
+
+        # The latents interact among themselves
+        self.bottleneck_norm = nn.LayerNorm(self.embed_dim, elementwise_affine=elementwise_affine, eps=1e-6)
+        self.bottleneck = Attention(self.embed_dim, self.mha_heads, *args, **kwargs)
+
+        self.ffn_norm = nn.LayerNorm(self.embed_dim, elementwise_affine=elementwise_affine, eps=1e-6)
+        self.fc1 = nn.Linear(self.embed_dim, self.ffn_embed_dim)
+        self.fc2 = nn.Linear(self.ffn_embed_dim, self.embed_dim)
+
+        # Scatter: 
+        # The input sequence attends to the latents
+        # Sequence are Q, Latents are K, V
+        self.out_norm_lat = nn.LayerNorm(self.embed_dim, elementwise_affine=elementwise_affine, eps=1e-6)
+        self.out_attn = CrossAttention(self.embed_dim, self.mha_heads, *args, **kwargs)
+
+    def forward(self, x, mask):
+        # x: (B * T, L, C)
+        # mask: (B * T, L)
+        BT, L, C = x.shape
+
+        latents = self.latent_vectors.unsqueeze(0).repeat(BT, 1, 1)
+        # latents: (B * T, num_latents, C)
+
+        # latents attend to x
+        residual = latents
+        latents = self.in_norm_lat(latents)
+        x = self.norm_seq(x)
+        latents = self.in_attn(latents, x, mask=mask)
+        latents = residual + latents
+
+        # latents attend to latents
+        residual = latents
+        latents = self.bottleneck_norm(latents)
+        latents = self.bottleneck(latents, mask=None)  # No masking here, as all latents are valid as keys.
+        latents = residual + latents
+
+        # latents processed by FFN
+        residual = latents
+        latents = self.ffn_norm(latents)
+        latents = self.fc2(gelu(self.fc1(latents)))
+        latents = residual + latents
+
+        # x attend to latents
+        latents = self.out_norm_lat(latents)
+        x = self.out_attn(x, latents, mask=None)  # No masking here, as all latents are valid as keys.
+
         return x
 
 
@@ -388,11 +470,13 @@ class LatentMDGenLayer(nn.Module):
     """Transformer layer block."""
 
     def __init__(self, embed_dim, ffn_embed_dim, mha_heads, dropout=0.0, num_frames=50, hyena=False,
-                 use_rotary_embeddings=False, deactivate_pos_rope=False, use_time_attention=True, ipa_args=None):
+                 bottleneck_attention=False, use_rotary_embeddings=False, deactivate_pos_rope=False,
+                 use_time_attention=True, ipa_args=None):
         super().__init__()
         self.embed_dim = embed_dim
         self.num_frames = num_frames
         self.hyena = hyena
+        self.bottleneck_attention = bottleneck_attention
         self.ffn_embed_dim = ffn_embed_dim
         self.mha_heads = mha_heads
         self.inf = 1e5
@@ -429,13 +513,25 @@ class LatentMDGenLayer(nn.Module):
                 use_rotary_embeddings=self.use_rotary_embeddings,
             )
 
-        self.mha_l = Attention(
-            self.embed_dim,
-            self.mha_heads,
-            add_bias_kv=add_bias_kv,
-            dropout=dropout,
-            use_rotary_embeddings=self.use_rotary_embeddings and not self.deactivate_pos_rope,
-        )
+        if self.bottleneck_attention:
+            assert not self.use_rotary_embeddings or self.deactivate_pos_rope, "RoPE not supported in BottleneckAttention"
+            self.mha_l = BottleneckAttention(
+                num_latents=2,
+                embed_dim=self.embed_dim,
+                ffn_embed_dim=self.ffn_embed_dim,
+                mha_heads=self.mha_heads,
+                elementwise_affine=False,
+                add_bias_kv=add_bias_kv,
+                dropout=dropout,
+            )
+        else: 
+            self.mha_l = Attention(
+                self.embed_dim,
+                self.mha_heads,
+                add_bias_kv=add_bias_kv,
+                dropout=dropout,
+                use_rotary_embeddings=self.use_rotary_embeddings and not self.deactivate_pos_rope,
+            )
 
         self.mha_layer_norm = nn.LayerNorm(self.embed_dim, elementwise_affine=False, eps=1e-6)
 

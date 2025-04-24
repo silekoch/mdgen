@@ -80,6 +80,7 @@ def parse_train_args():
     ## Model settings
     group = parser.add_argument_group("Model settings")
     group.add_argument('--hyena', action='store_true')
+    group.add_argument('--bottleneck_attention', action='store_true')
     group.add_argument('--no_rope', action='store_true')
     group.add_argument('--no_rope_in_pos', action='store_true')
     group.add_argument('--dropout', type=float, default=0.0)
