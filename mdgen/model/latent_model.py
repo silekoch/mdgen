@@ -96,6 +96,7 @@ class LatentMDGenModel(nn.Module):
                     hyena=args.hyena,
                     num_frames=args.num_frames,
                     use_rotary_embeddings=not args.no_rope,
+                    deactivate_pos_rope=args.no_rope_in_pos,
                     use_time_attention=True,
                     ipa_args=ipa_args if args.interleave_ipa else None,
                 )
@@ -387,7 +388,7 @@ class LatentMDGenLayer(nn.Module):
     """Transformer layer block."""
 
     def __init__(self, embed_dim, ffn_embed_dim, mha_heads, dropout=0.0, num_frames=50, hyena=False,
-                 use_rotary_embeddings=False, use_time_attention=True, ipa_args=None):
+                 use_rotary_embeddings=False, deactivate_pos_rope=False, use_time_attention=True, ipa_args=None):
         super().__init__()
         self.embed_dim = embed_dim
         self.num_frames = num_frames
@@ -397,6 +398,7 @@ class LatentMDGenLayer(nn.Module):
         self.inf = 1e5
         self.use_time_attention = use_time_attention
         self.use_rotary_embeddings = use_rotary_embeddings
+        self.deactivate_pos_rope = deactivate_pos_rope
         self._init_submodules(add_bias_kv=True, dropout=dropout, ipa_args=ipa_args)
 
     def _init_submodules(self, add_bias_kv=False, dropout=0.0, ipa_args=None):
@@ -432,7 +434,7 @@ class LatentMDGenLayer(nn.Module):
             self.mha_heads,
             add_bias_kv=add_bias_kv,
             dropout=dropout,
-            use_rotary_embeddings=self.use_rotary_embeddings,
+            use_rotary_embeddings=self.use_rotary_embeddings and not self.deactivate_pos_rope,
         )
 
         self.mha_layer_norm = nn.LayerNorm(self.embed_dim, elementwise_affine=False, eps=1e-6)

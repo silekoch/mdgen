@@ -81,6 +81,7 @@ def parse_train_args():
     group = parser.add_argument_group("Model settings")
     group.add_argument('--hyena', action='store_true')
     group.add_argument('--no_rope', action='store_true')
+    group.add_argument('--no_rope_in_pos', action='store_true')
     group.add_argument('--dropout', type=float, default=0.0)
     group.add_argument('--scale_factor', type=float, default=1.0)
     group.add_argument('--interleave_ipa', action='store_true')
