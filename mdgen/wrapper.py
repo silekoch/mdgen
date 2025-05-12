@@ -198,6 +198,8 @@ class NewMDGenWrapper(Wrapper):
             latent_dim += 20
         if args.no_frames:
             latent_dim = 111
+        if args.translations_only:
+            latent_dim = 3 if not (self.args.tps_condition or self.args.inpainting or self.args.dynamic_mpnn) else 6
         
         self.latent_dim = latent_dim
         self.model = LatentMDGenModel(args, latent_dim)
@@ -279,6 +281,71 @@ class NewMDGenWrapper(Wrapper):
             }
         }
 
+    def prep_batch_translations_only(self, batch):
+        # Assume batch['trans'] has shape (B, T, L, 3) - absolute translations from dataset.py
+        # Assume batch['mask'] has shape (B, L) - residue mask
+        # Assume batch['seqres'] has shape (B, L) - amino acid types
+
+        B, T, L, _ = batch['trans'].shape
+        latent_dim = 3 # Base dimension for translation
+
+        # 1. Calculate Target Relative Translations ('latents')
+        start_trans = batch['trans'][:, 0] # Key frame(s) for offset calculation
+        latents = batch['trans'] - start_trans.unsqueeze(1) # Relative offset from start frame (B, T, L, 3)
+
+        # --- Adapt for different conditioning if needed ---
+        # Example for TPS/Inpainting (latent_dim would be 6)
+        if self.args.tps_condition or self.args.inpainting or self.args.dynamic_mpnn:
+            raise NotImplementedError
+        #    latent_dim = 6
+        #    end_trans = batch['trans'][:, -1:]
+        #    rel_start_trans = batch['trans'] - start_trans
+        #    rel_end_trans = batch['trans'] - end_trans
+        #    latents = torch.cat([rel_start_trans, rel_end_trans], -1) # Shape (B, T, L, 6)
+        # else: # Default sim_condition
+        #    latents = batch['trans'] - start_trans # Shape (B, T, L, 3)
+        # ----------------------------------------------------
+
+        # 2. Create Loss Mask
+        # Mask should be 1 only where residues exist, matching latent dimensions
+        loss_mask = batch['mask'].unsqueeze(1).unsqueeze(-1).expand(B, T, L, latent_dim)
+
+        # 3. Prepare Conditioning Information for model_kwargs
+        # Conditioning mask (indicates known time points/residues)
+        cond_mask = torch.zeros(B, T, L, dtype=torch.int, device=latents.device)
+        if self.args.sim_condition: # Example condition
+            cond_mask[:, 0] = 1    # Condition on the first frame
+        # Add other conditioning logic for TPS, inpainting, intervals etc. based on self.args
+
+        # Conditional latents (the known relative translations based on cond_mask)
+        x_cond = torch.where(cond_mask.unsqueeze(-1).bool(), latents, torch.zeros_like(latents))
+
+        # Model's view of the residue mask
+        model_residue_mask = batch['mask'].unsqueeze(1).expand(B, T, L)
+
+        # Create dummy identity rotations matching the shape of translations
+        dummy_start_rots = Rotation.identity(start_trans.shape[:-1], device=start_trans.device) # Shape (B, L)
+
+        # Create dummy Rigid objects
+        dummy_start_frames = Rigid(rots=dummy_start_rots, trans=start_trans) # Shape (B, L) Rigid object
+
+        return_dict = {
+            'latents': latents,      # Target relative translations (B, T, L, latent_dim)
+            'loss_mask': loss_mask,  # Mask for loss calculation (B, T, L, latent_dim)
+            'model_kwargs': {
+                'mask': model_residue_mask,       # Residue existence mask (B, T, L)
+                'aatype': batch['seqres'],           # Amino acid sequence types (B, L)
+                'x_cond': x_cond,                 # Known relative translations (B, T, L, latent_dim)
+                'x_cond_mask': cond_mask,         # Mask indicating known values in x_cond (B, T, L)
+
+                # IPA requires start frames, as a workaround we provide dummy identity rotations
+                'start_frames': dummy_start_frames, # Dummy start frames (B, L) Rigid object
+            }
+        }
+
+        return return_dict
+
+
         
     def prep_batch(self, batch):
 
@@ -288,6 +355,9 @@ class NewMDGenWrapper(Wrapper):
         # if self.args.hyena:
         if 'latents' in batch:
             return self.prep_hyena_batch(batch)
+        
+        if self.args.translations_only:
+            return self.prep_batch_translations_only(batch)
 
         rigids = Rigid(
             trans=batch['trans'],
