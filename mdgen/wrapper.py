@@ -333,6 +333,17 @@ class NewMDGenWrapper(Wrapper):
 
         loss_mask = torch.cat([frame_loss_mask, torsion_loss_mask], -1)
         loss_mask = loss_mask.unsqueeze(1).expand(-1, T, -1, -1)
+        
+        if self.args.supervise_no_rotations:
+            # Indices for rotation quaternions in the 7D frame representation
+            rotation_indices = [0, 1, 2, 3]
+
+            # If using TPS/inpainting (14D frame offset = 7D from start + 7D from end):
+            if self.args.tps_condition or self.args.inpainting or self.args.dynamic_mpnn:
+                rotation_indices = [0, 1, 2, 3, 7, 8, 9, 10]
+            
+            # Zero out the mask for the rotation components
+            loss_mask[..., rotation_indices] = 0.0
 
         ########
         cond_mask = torch.zeros(B, T, L, dtype=int, device=offsets.device)
