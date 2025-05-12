@@ -24,6 +24,7 @@ from mdgen.tensor_utils import tensor_tree_map
 
 from mdgen.residue_constants import restype_order
 from mdgen.wrapper import NewMDGenWrapper
+from mdgen.utils import atom14_to_pdb
 from mdgen.dataset import atom14_to_frames
 import pandas as pd
 import contextlib
@@ -49,11 +50,11 @@ def get_sample(arr, seqres, start_idxs, end_idxs, start_state, end_state, num_fr
     seqres = torch.tensor([restype_order[c] for c in seqres])
 
     start_frames = atom14_to_frames(torch.from_numpy(start_arr))
-    start_atom37 = torch.from_numpy(atom14_to_atom37(start_arr, seqres)).float()
+    start_atom37 = torch.from_numpy(atom14_to_atom37(start_arr, seqres[None])).float()
     start_torsions, start_torsion_mask = atom37_to_torsions(start_atom37, seqres[None])
     
     end_frames = atom14_to_frames(torch.from_numpy(end_arr))
-    end_atom37 = torch.from_numpy(atom14_to_atom37(end_arr, seqres)).float()
+    end_atom37 = torch.from_numpy(atom14_to_atom37(end_arr, seqres[None])).float()
     end_torsions, end_torsion_mask = atom37_to_torsions(end_atom37, seqres[None])
     L = start_frames.shape[1]
     traj_torsions = start_torsions.expand(num_frames, -1, -1, -1).clone()
@@ -157,14 +158,25 @@ def main():
     df = pd.read_csv(args.split, index_col='name')
     names = np.array(df.index)
 
-    chunks = np.array_split(names, args.n_chunks)
+    jobs = []
+    n_expected = len(names) if not args.pdb_id else len(args.pdb_id)
+    for name in names:
+        if args.pdb_id and name not in args.pdb_id:
+            continue
+        if not os.path.exists(f'{args.data_dir}/{name}{args.suffix}.npy'):
+            continue
+        jobs.append(name)
+    n_not_found = n_expected - len(jobs)
+    if n_not_found:
+        print(f'Did not find {n_not_found}/{n_expected} molecules '
+              f'specified in the split. Skipping those ...')
+
+    chunks = np.array_split(jobs, args.n_chunks)
     chunk = chunks[args.chunk_idx]
     print('#' * 20)
     print(f'RUN NUMBER: {args.chunk_idx}, PROCESSING IDXS {args.chunk_idx * len(chunk)}-{(args.chunk_idx + 1) * len(chunk)}')
     print('#' * 20)
     for name in tqdm.tqdm(chunk, desc='num peptides'):
-        if args.pdb_id and name not in args.pdb_id:
-            continue
         do(model, name, df.seqres[name])
 
 

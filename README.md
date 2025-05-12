@@ -16,6 +16,7 @@ pip install torch==1.12.1+cu113 -f https://download.pytorch.org/whl/torch_stable
 pip install pytorch_lightning==2.0.4 mdtraj==1.9.9 biopython==1.79
 pip install wandb dm-tree einops torchdiffeq fair-esm pyEMMA
 pip install matplotlib==3.7.2 numpy==1.21.2
+pip install statsmodels
 ```
 
 ## Datasets
@@ -33,18 +34,18 @@ gsutil -m rsync -r gs://mdgen-public/4AA_sims_implicit data/4AA_sims_implicit
 3. Preprocess the tetrapeptide simulations
 ```
 # Forward simulation and TPS, prep with interval 100 * 100fs = 10ps
-python -m scripts.prep_sims --splits splits/4AA.csv --sim_dir data/4AA_sims --outdir data/4AA_data --num_workers [N] --suffix _i100 --stride 100
+python -m scripts.prep_sims --split splits/4AA.csv --sim_dir data/4AA_sims --outdir data/4AA_data --num_workers [N] --suffix _i100 --stride 100
 
 # Upsampling, prep with interval 100fs
-python -m scripts.prep_sims --splits splits/4AA_implicit.csv --sim_dir data/4AA_sims_implicit --outdir data/4AA_data_implicit --num_workers [N]
+python -m scripts.prep_sims --split splits/4AA_implicit.csv --sim_dir data/4AA_sims_implicit --outdir data/4AA_data_implicit --num_workers [N]
 
 # Inpainting, prep with interval 100fs 
-python -m scripts.prep_sims --splits splits/4AA.csv --sim_dir data/4AA_sims --outdir data/4AA_data --num_workers [N]
+python -m scripts.prep_sims --split splits/4AA.csv --sim_dir data/4AA_sims --outdir data/4AA_data --num_workers [N]
 ```
 4. Preprocess the ATLAS simulations
 ```
 # Prep with interval 40 * 10 ps = 400 ps
-python -m scripts.prep_sims --splits splits/atlas.csv --sim_dir data/atlas_sims --outdir data/atlas_data --num_workers [N] --suffix _i40 --stride 40
+python -m scripts.prep_sims --split splits/atlas.csv --sim_dir data/atlas_sims --outdir data/atlas_data --num_workers [N] --suffix _i40 --stride 40
 ```
 
 ## Training
@@ -83,13 +84,13 @@ wget https://storage.googleapis.com/mdgen-public/weights/atlas.ckpt
 Commands similar to these were used to obtain the samples analyzed in the paper.
 ```
 # Forward simulation
-python sim_inference.py --sim_ckpt forward_sim.ckpt --data_dir share/4AA_sims --split splits/4AA_test.csv --num_rollouts 10 --num_frames 1000 --xtc --out_dir [DIR]
+python sim_inference.py --sim_ckpt forward_sim.ckpt --data_dir data/4AA_data --split splits/4AA_test.csv --num_rollouts 10 --num_frames 1000 --xtc --suffix _i100 --out_dir [DIR]
 
 # Interpolation / TPS
-python tps_inference.py --sim_ckpt interpolation.ckpt --data_dir share/4AA_sims --split splits/4AA_test.csv --num_frames 100 --suffix _i100 --mddir data/4AA_sims  --out_dir /data/cb/scratch/share/results/0506_tps_1ns 
+python tps_inference.py --sim_ckpt interpolation.ckpt --data_dir data/4AA_data --split splits/4AA_test.csv --num_frames 100 --suffix _i100 --mddir data/4AA_sims  --out_dir [DIR] 
 
 # Upsampling 
-python upsampling_inference.py --ckpt upsampling.ckpt --split splits/4AA_implicit_test.csv --out_dir outpdb/0505_100ps_upsampling_3139 --batch_size 10 --xtc --out_dir [DIR]
+python upsampling_inference.py --ckpt upsampling.ckpt --data_dir data/4AA_data_implicit --split splits/4AA_implicit_test.csv --batch_size 10 --out_dir [DIR]
 
 # Inpainting / design for high flux transitions
 python design_inference.py --sim_ckpt inpainting.ckpt --split splits/4AA_test.csv --data_dir data/4AA_data/ --num_frames 100 --mddir data/4AA_sims --random_start_idx --out_dir [DIR] 
@@ -109,13 +110,13 @@ We run analysis scripts that produce a pickle file in each sample directory.
 python -m scripts.analyze_peptide_sim --mddir data/4AA_sims --pdbdir [DIR] --plot --save --num_workers 1
 
 # Interpolation / TPS
-python -m scripts.analyze_peptide_tps --mddir data/4AA_sims --data_dir data/4AA_sims  --pdbdir [DIR] --plot --save --num_workers 1 --outdir [DIR]
+python -m scripts.analyze_peptide_tps --mddir data/4AA_sims  --pdbdir [DIR] --plot --save --num_workers 1 --outdir [DIR]
 
 # Upsampling
-python -m scripts.analyze_upsampling --mddir data/4AA_sims_implicit --pdbdir [DIR] --plot --save --num_workers 1
+python -m scripts.analyze_upsampling --mddir data/4AA_sims_implicit --pdbdir [DIR]
 
 # Inpainting / design
-python -m scripts.analyze_peptide_design --mddir data/4AA_sims --data_dir data/4AA_data --pdbdir [DIR]
+python -m scripts.analyze_peptide_design --mddir data/4AA_sims --pdbdir [DIR]
 ```
 To analyze the ATLAS rollouts, follow the instructions at https://github.com/bjing2016/alphaflow?tab=readme-ov-file#Evaluation-scripts.
 

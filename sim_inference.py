@@ -128,13 +128,23 @@ def do(model, name, seqres):
 def main():
     model = NewMDGenWrapper.load_from_checkpoint(args.sim_ckpt)
     model.eval().to('cuda')
-    
-    
     df = pd.read_csv(args.split, index_col='name')
-    for name in df.index:
+    names = np.array(df.index)
+
+    jobs = []
+    n_expected = len(names) if not args.pdb_id else len(args.pdb_id)
+    for name in names:
         if args.pdb_id and name not in args.pdb_id:
             continue
+        if not os.path.exists(f'{args.data_dir}/{name}{args.suffix}.npy'):
+            continue
+        jobs.append(name)
+    n_not_found = n_expected - len(jobs)
+    if n_not_found:
+        print(f'Did not find {n_not_found}/{n_expected} molecules '
+              f'specified in the split. Skipping those ...')
+
+    for name in jobs:
         do(model, name, df.seqres[name])
-        
 
 main()

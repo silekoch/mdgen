@@ -2,11 +2,12 @@ import argparse
 parser = argparse.ArgumentParser()
 parser.add_argument('--ckpt', type=str, default=None, required=True)
 parser.add_argument('--data_dir', type=str, default=None, required=True)
-parser.add_argument('--suffix', type=str, default='_i100')
+parser.add_argument('--suffix', type=str, default='')
 parser.add_argument('--pdb_id', nargs='*', default=[])
 parser.add_argument('--batch_size', type=int, default=1)
 parser.add_argument('--out_dir', type=str, default=".")
 parser.add_argument('--split', type=str, default='splits/4AA_implicit_test.csv')
+parser.add_argument('--hparams_file', type=str, default=None)
 args = parser.parse_args()
 
 import os, torch, mdtraj, tqdm
@@ -25,7 +26,7 @@ os.makedirs(args.out_dir, exist_ok=True)
 
 
 
-def get_batch(name, seqres, num_frames):
+def get_batch(name, seqres):
     arr = np.lib.format.open_memmap(f'{args.data_dir}/{name}{args.suffix}.npy', 'r')
     arr = np.copy(arr).astype(np.float32)
 
@@ -67,7 +68,7 @@ def split_batch(item, num_frames=1000, cond_interval=100):
     
 def do(model, name, seqres):
 
-    item = get_batch(name, seqres, num_frames = model.args.num_frames)
+    item = get_batch(name, seqres)
     
     items = split_batch(item, num_frames=model.args.num_frames, cond_interval=model.args.cond_interval)
     
@@ -91,14 +92,25 @@ def do(model, name, seqres):
 
 @torch.no_grad()
 def main():
-    model = NewMDGenWrapper.load_from_checkpoint(args.ckpt)
+    model = NewMDGenWrapper.load_from_checkpoint(args.ckpt, hparams_file=args.hparams_file)
     model.eval().to('cuda')
-    
-    
     df = pd.read_csv(args.split, index_col='name')
-    for name in df.index:
+    names = np.array(df.index)
+
+    jobs = []
+    n_expected = len(names) if not args.pdb_id else len(args.pdb_id)
+    for name in names:
         if args.pdb_id and name not in args.pdb_id:
             continue
+        if not os.path.exists(f'{args.data_dir}/{name}{args.suffix}.npy'):
+            continue
+        jobs.append(name)
+    n_not_found = n_expected - len(jobs)
+    if n_not_found:
+        print(f'Did not find {n_not_found}/{n_expected} molecules '
+              f'specified in the split. Skipping those ...')
+
+    for name in jobs:
         do(model, name, df.seqres[name])
         
 

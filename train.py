@@ -50,7 +50,7 @@ trainer = pl.Trainer(
     limit_val_batches=0.0 if args.no_validate else (args.val_batches or 1.0),
     num_sanity_val_steps=0,
     precision=args.precision,
-    enable_progress_bar=not args.wandb or os.getlogin() == 'hstark',
+    enable_progress_bar=not args.wandb or args.progress_bar,
     gradient_clip_val=args.grad_clip,
     default_root_dir=os.environ["MODEL_DIR"], 
     callbacks=[

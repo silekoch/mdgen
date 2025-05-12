@@ -7,6 +7,7 @@ parser.add_argument('--outdir', type=str, default='./data_atlas')
 parser.add_argument('--num_workers', type=int, default=1)
 parser.add_argument('--suffix', type=str, default='')
 parser.add_argument('--atlas', action='store_true')
+parser.add_argument('--cutoff', type=int, default=None)
 parser.add_argument('--stride', type=int, default=1)
 args = parser.parse_args()
 
@@ -23,9 +24,15 @@ names = df.index
 
 def main():
     jobs = []
+    n_not_found = 0
     for name in names:
         if os.path.exists(f'{args.outdir}/{name}{args.suffix}.npy'): continue
+        if not os.path.exists(f'{args.sim_dir}/{name}'):
+            n_not_found += 1
+            continue
         jobs.append(name)
+    print(f'Did not find {n_not_found}/{len(names)} simulations '
+          f'specified in the split. Skipping those ...')
 
     if args.num_workers > 1:
         p = Pool(args.num_workers)
@@ -64,17 +71,17 @@ def traj_to_atom14(traj):
 if args.atlas:
     def do_job(name):
         for i in [1,2,3]:
-            traj = mdtraj.load(f'{args.atlas_dir}/{name}/{name}_prod_R{i}_fit.xtc', top=f'{args.atlas_dir}/{name}/{name}.pdb') 
+            traj = mdtraj.load(f'{args.sim_dir}/{name}/{name}_prod_R{i}_fit.xtc', top=f'{args.sim_dir}/{name}/{name}.pdb') 
             traj.atom_slice([a.index for a in traj.top.atoms if a.element.symbol != 'H'], True)
             traj.superpose(traj)
             arr = traj_to_atom14(traj)
-            np.save(f'{args.outdir}/{name}_R{i}{args.suffix}.npy', arr[::args.stride])
+            np.save(f'{args.outdir}/{name}_R{i}{args.suffix}.npy', arr[:args.cutoff:args.stride])
 else:
     def do_job(name):
-        traj = mdtraj.load(f'{args.atlas_dir}/{name}/{name}.xtc', top=f'{args.atlas_dir}/{name}/{name}.pdb')
+        traj = mdtraj.load(f'{args.sim_dir}/{name}/{name}.xtc', top=f'{args.sim_dir}/{name}/{name}.pdb')
         traj.superpose(traj)
         arr = traj_to_atom14(traj)
-        np.save(f'{args.outdir}/{name}{args.suffix}.npy', arr[::args.stride])
+        np.save(f'{args.outdir}/{name}{args.suffix}.npy', arr[:args.cutoff:args.stride])
 
 if __name__ == "__main__":
     main()
