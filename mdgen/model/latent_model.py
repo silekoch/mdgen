@@ -11,6 +11,9 @@ from .layers import gelu, modulate
 from .ipa import InvariantPointAttention
 from ..utils import DirichletConditionalFlow, simplex_proj, get_offsets
 
+from schnetpack import properties
+from schnetpack.nn import GaussianRBF, CosineCutoff
+from schnetpack.representation import SchNet
 
 def grad_checkpoint(func, args, checkpointing=False):
     if checkpointing:
@@ -84,6 +87,24 @@ class LatentMDGenModel(nn.Module):
                     )
                     for _ in range(args.num_layers)
                 ]
+            )
+
+        if args.prepend_schnet:
+            if not self.args.no_aa_emb:
+                self.aatype_to_emb = nn.Embedding(21, args.embed_dim)
+            else:
+                raise NotImplementedError("Non-AA embedding ablation not implemented for SchNet")
+
+            radial_basis = GaussianRBF(n_rbf=self.args.schnet_n_rbf, cutoff=self.args.schnet_cutoff)
+            cutoff_fn = CosineCutoff(self.args.schnet_cutoff)
+
+            self.schnet = SchNet(
+                n_atom_basis=args.embed_dim,
+                n_interactions=args.num_layers,
+                radial_basis=radial_basis,
+                cutoff_fn=cutoff_fn,
+                n_filters=self.args.schnet_filters,
+                nuclear_embedding=self.aatype_to_emb,
             )
 
         self.layers = nn.ModuleList(
@@ -206,6 +227,53 @@ class LatentMDGenModel(nn.Module):
         # x = x[:, None] + x_latent
         return x
 
+    def run_schnet(self, start_frames, aatype, device):
+        B, L = aatype.shape
+        x = torch.zeros(B, L, self.args.embed_dim, device=device)
+        
+        translations = start_frames.get_trans()  # (B, L, 3)
+
+        Rij_all_pairs = translations[:, :, None, :] - translations[:, None, :, :]  # (B, L, L, 3)
+        # Set diagonal to infinity (excludes self interactions)
+        idx = torch.arange(L, device=Rij_all_pairs.device)
+        Rij_all_pairs[:, idx, idx, :] = torch.inf
+
+        # Get indices of neighbors with distance < cutoff
+        cutoff = self.args.schnet_cutoff
+
+        # Compare squared distances to avoid sqrt
+        dist_sq = torch.sum(Rij_all_pairs**2, dim=-1)  # (B, L, L)
+        mask = dist_sq < (cutoff**2)  # (B, L, L)
+
+        # SchNet has no notion of batch size, the batches are handled implicitly
+        # by the index pairs that are allowed to interact. Thus, we need to 
+        # flatten the batch into this format. 
+
+        # Get the indices (batch, center AA, neighbor AA) of the valid pairs
+        b_indices, i_indices, j_indices = torch.nonzero(mask, as_tuple=True)
+
+        # Extract the offset vectors Rij for the valid pairs
+        valid_Rij = Rij_all_pairs[b_indices, i_indices, j_indices]  # (N_valid, 3)
+
+        # Compute the global indices for idx_i and idx_j
+        # These indices refer to the flattened list of residues (of size B*L).
+        flattened_idx_i = b_indices * L + i_indices  # (B*L)
+        flattened_idx_j = b_indices * L + j_indices  # (B*L)
+
+        schnet_input = {
+            properties.Z: aatype.reshape((B*L)),  # Residue types
+            properties.Rij: valid_Rij,  # Neighbor offsets
+            properties.idx_i: flattened_idx_i,  # Indices of center residues
+            properties.idx_j: flattened_idx_j,  # Indices of neighboring residues
+        }
+
+        schnet_output = self.schnet(schnet_input)
+        schnet_embedding = schnet_output['scalar_representation']
+
+        x = x + schnet_embedding.reshape(B, L, self.args.embed_dim)
+
+        return x
+
     def forward(self, x, t, mask,
                 start_frames=None, end_frames=None,
                 x_cond=None, x_cond_mask=None,
@@ -241,6 +309,9 @@ class LatentMDGenModel(nn.Module):
 
         if self.args.prepend_ipa:  # IPA doesn't need checkpointing
             x = x + self.run_ipa(t[:, 0], mask[:, 0], start_frames, end_frames, aatype, x_d=x_d)[:, None]
+
+        if self.args.prepend_schnet:
+            x = x + self.run_schnet(start_frames, aatype, device=mask.device)[:, None]
 
         for layer_idx, layer in enumerate(self.layers):
             x = grad_checkpoint(layer, (x, t, mask, start_frames), self.args.grad_checkpointing)
