@@ -45,7 +45,7 @@ python -m scripts.prep_sims --split splits/4AA.csv --sim_dir data/4AA_sims --out
 4. Preprocess the ATLAS simulations
 ```
 # Prep with interval 40 * 10 ps = 400 ps
-python -m scripts.prep_sims --split splits/atlas.csv --sim_dir data/atlas_sims --outdir data/atlas_data --num_workers [N] --suffix _i40 --stride 40
+python -m scripts.prep_sims --atlas --split splits/atlas.csv --sim_dir data/atlas_sims --outdir data/atlas_data --num_workers [N] --suffix _i40 --stride 40
 ```
 
 ## Training
