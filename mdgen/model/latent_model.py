@@ -83,7 +83,7 @@ class LatentMDGenModel(nn.Module):
                         mha_heads=args.mha_heads,
                         dropout=args.dropout,
                         use_rotary_embeddings=not args.no_rope,
-                        ipa_args=ipa_args
+                        ipa_args=ipa_args if not args.overwrite_ipa_with_linear else None,
                     )
                     for _ in range(args.num_layers)
                 ]
@@ -159,6 +159,11 @@ class LatentMDGenModel(nn.Module):
                     nn.init.constant_(module.bias, 0)
 
         self.apply(_basic_init)
+
+        if self.args.prepend_ipa and not self.args.overwrite_ipa_with_linear:
+            for block in self.ipa_layers:
+                nn.init.constant_(block.ipa.linear_out.weight, 0)
+                nn.init.constant_(block.ipa.linear_out.bias, 0)
 
         if self.args.interleave_ipa:
             for block in self.layers:
@@ -496,8 +501,13 @@ class IPALayer(nn.Module):
             nn.Linear(self.embed_dim, 6 * self.embed_dim, bias=True)
         )
 
-        self.cond_norm = nn.LayerNorm(7)
-        self.cond_to_emb = nn.Linear(7, self.embed_dim)
+        if ipa_args:
+            self.ipa_norm = nn.LayerNorm(self.embed_dim)
+            self.ipa = InvariantPointAttention(**ipa_args)
+        else:
+            # If no ipa_args are provided, overwrite the ipa processing with simple linear embeddings
+            self.cond_norm = nn.LayerNorm(7)
+            self.cond_to_emb = nn.Linear(7, self.embed_dim)
 
         self.mha_l = Attention(
             self.embed_dim,
@@ -518,8 +528,11 @@ class IPALayer(nn.Module):
         shift_msa_l, scale_msa_l, gate_msa_l, \
             shift_mlp, scale_mlp, gate_mlp = self.adaLN_modulation(t).chunk(6, dim=-1)
         
-        frames = frames.to_tensor_7()
-        x = x + self.cond_to_emb(self.cond_norm(frames))
+        if hasattr(self, 'ipa'):
+            x = x + self.ipa(self.ipa_norm(x), frames, frame_mask=mask)
+        else:
+            frames = frames.to_tensor_7()
+            x = x + self.cond_to_emb(self.cond_norm(frames))
 
         residual = x
         x = modulate(self.mha_layer_norm(x), shift_msa_l, scale_msa_l)

@@ -87,6 +87,7 @@ def parse_train_args():
     group.add_argument('--scale_factor', type=float, default=1.0)
     group.add_argument('--interleave_ipa', action='store_true')
     group.add_argument('--prepend_ipa', action='store_true')
+    group.add_argument('--overwrite_ipa_with_linear', action='store_true')
     group.add_argument('--prepend_schnet', action='store_true')
     group.add_argument('--schnet_cutoff', type=float, default=5.0)
     group.add_argument('--schnet_n_rbf', type=int, default=20)
