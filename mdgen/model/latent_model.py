@@ -72,6 +72,12 @@ class LatentMDGenModel(nn.Module):
             'dropout': args.dropout,
         }
 
+        if self.args.prepend_aatype_to_emb:
+            if not self.args.no_aa_emb:
+                self.aatype_to_emb = nn.Embedding(21, args.embed_dim)
+            else:
+                raise NotImplementedError("Inconsistend arguments: prepend_aatype_to_emb requires no_aa_emb=False")
+
         if args.prepend_ipa:
             if not self.args.no_aa_emb:
                 self.aatype_to_emb = nn.Embedding(21, args.embed_dim)
@@ -195,6 +201,18 @@ class LatentMDGenModel(nn.Module):
             nn.init.constant_(self.emb_to_latent.linear.weight, 0)
             nn.init.constant_(self.emb_to_latent.linear.bias, 0)
 
+    def run_aatype_to_emb(self, aatype):
+        if self.args.sim_condition or self.args.mpnn:
+            B, L = aatype.shape
+            x = torch.zeros(B, L, self.args.embed_dim, device=aatype.device)
+            if aatype is not None and not self.args.no_aa_emb:
+                x = x + self.aatype_to_emb(aatype)
+            if self.args.design:
+                raise NotImplementedError("Design condition not implemented for run_aatype_to_emb")
+            return x
+        else:
+            raise NotImplementedError("ONly forward mode implemented for run_aatype_to_emb")
+
     def run_ipa(
             self,
             t,
@@ -311,6 +329,9 @@ class LatentMDGenModel(nn.Module):
             x = x + self.cond_to_emb(x_cond) + self.mask_to_emb(x_cond_mask)  # token has cond g, tau
 
         t = self.t_embedder(t * self.args.time_multiplier)[:, None]
+
+        if self.args.prepend_aatype_to_emb:
+            x = x + self.run_aatype_to_emb(aatype)[:, None]
 
         if self.args.prepend_ipa:  # IPA doesn't need checkpointing
             x = x + self.run_ipa(t[:, 0], mask[:, 0], start_frames, end_frames, aatype, x_d=x_d)[:, None]
