@@ -254,7 +254,10 @@ class LatentMDGenModel(nn.Module):
         B, L = aatype.shape
         x = torch.zeros(B, L, self.args.embed_dim, device=device)
         
-        translations = start_frames.get_trans()  # (B, L, 3)
+        if not self.args.c_alpha_only:
+            translations = start_frames.get_trans()  # (B, L, 3)
+        else:
+            translations = start_frames
 
         Rij_all_pairs = translations[:, :, None, :] - translations[:, None, :, :]  # (B, L, L, 3)
         # Set diagonal to infinity (excludes self interactions)

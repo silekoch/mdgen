@@ -200,6 +200,8 @@ class NewMDGenWrapper(Wrapper):
             latent_dim = 111
         if args.translations_only:
             latent_dim = 3 if not (self.args.tps_condition or self.args.inpainting or self.args.dynamic_mpnn) else 6
+        if args.c_alpha_only:
+            latent_dim = 3
         
         self.latent_dim = latent_dim
         self.model = LatentMDGenModel(args, latent_dim)
@@ -346,11 +348,54 @@ class NewMDGenWrapper(Wrapper):
         return return_dict
 
 
+    def prep_batch_c_alpha_only(self, batch):
+        c_alpha_positions = batch['trans']
+        B, T, L, _ = c_alpha_positions.shape
         
+        if self.args.no_offsets:
+            latents = c_alpha_positions
+        else:
+            latents = c_alpha_positions - c_alpha_positions[:, 0:1]
+        
+        loss_mask = batch['mask'].unsqueeze(1).unsqueeze(-1).expand(B, T, L, 3)
+
+        if self.args.tps_condition or self.args.inpainting or self.args.dynamic_mpnn:
+            raise NotImplementedError()
+
+        cond_mask = torch.zeros(B, T, L, dtype=int, device=latents.device)
+        if self.args.sim_condition:
+            cond_mask[:, 0] = 1
+        if self.args.tps_condition:
+            cond_mask[:, 0] = cond_mask[:, -1] = 1
+        if self.args.cond_interval:
+            cond_mask[:, ::self.args.cond_interval] = 1
+        if self.args.inpainting or self.args.dynamic_mpnn or self.args.mpnn:
+            cond_mask[:, :, COND_IDX] = 1
+
+        aatype_mask = torch.ones_like(batch['seqres'])
+        if self.args.design:
+            aatype_mask[:, DESIGN_IDX] = 0
+
+        return {
+            'latents': latents,
+            'loss_mask': loss_mask,
+            'model_kwargs': {
+                'start_frames': c_alpha_positions[:, 0],
+                'end_frames': c_alpha_positions[:, -1],
+                'mask': batch['mask'].unsqueeze(1).expand(-1, T, -1),
+                'aatype': torch.where(aatype_mask.bool(), batch['seqres'], 20),
+                'x_cond': torch.where(cond_mask.unsqueeze(-1).bool(), latents, 0.0),
+                'x_cond_mask': cond_mask,
+            }
+        }
+
     def prep_batch(self, batch):
 
         if self.args.no_frames:
             return self.prep_batch_no_frames(batch)
+
+        if self.args.c_alpha_only:
+            return self.prep_batch_c_alpha_only(batch)
 
         # if self.args.hyena:
         if 'latents' in batch:
@@ -488,7 +533,7 @@ class NewMDGenWrapper(Wrapper):
         prep = self.prep_batch(batch)
 
         latents = prep['latents']
-        if not self.args.no_frames:
+        if not self.args.no_frames and not self.args.c_alpha_only:
             rigids = prep['rigids']
             B, T, L = rigids.shape
         else:
@@ -526,6 +571,17 @@ class NewMDGenWrapper(Wrapper):
             zs,
             partial(self.model.forward_inference, **prep['model_kwargs'])
         )[-1]
+
+        if self.args.c_alpha_only:
+            if self.args.design: 
+                raise NotImplementedError("See code below for design handling")
+            aa_out = batch['seqres'][:, None].expand(B, T, L)
+
+            if self.args.no_offsets:
+                return samples, aa_out
+            else:
+                initial_positions = prep['model_kwargs']['start_frames']
+                return initial_positions + samples, aa_out
 
         if self.args.no_frames:
             atom14 = atom37_to_atom14(
