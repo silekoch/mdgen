@@ -2,6 +2,7 @@ import numpy as np
 import scipy
 import torch
 from . import protein
+from . import residue_constants as rc
 from .geometry import atom14_to_atom37
 
 def get_offsets(ref_frame, rigids):
@@ -98,4 +99,62 @@ def prots_to_pdb(prots):
         ss += '\n'.join(prot.split('\n')[2:-3])
         ss += '\nENDMDL\n'
     return ss
+
+def atom1_to_pdb(atom1, aatype, path):
+    """Save a coarse-grained MD trajectory with only C-alpha atoms.
+    
+    Args:
+        atom1: Array of shape (num_frames, num_residues, 3) containing C-alpha coordinates
+        aatype: Array of amino acid types for each residue
+        path: Output path for PDB file
+    """
+    prots = []
+    for i, ca_coords in enumerate(atom1):
+        prots.append(create_ca_only_prot(ca_coords, aatype=aatype))
+    with open(path, 'w') as f:
+        f.write(prots_to_pdb(prots))
+
+
+def create_ca_only_prot(
+        ca_coords: np.ndarray,
+        aatype=None,
+        b_factors=None,
+    ):
+    """Create a Protein object with only C-alpha atoms.
+    
+    Args:
+        ca_coords: Array of shape (num_residues, 3) containing C-alpha coordinates
+        aatype: Array of amino acid types for each residue
+        b_factors: B-factors for each residue (optional)
+    
+    Returns:
+        Protein object with only CA atoms
+    """
+    assert ca_coords.ndim == 2
+    assert ca_coords.shape[-1] == 3
+    n = ca_coords.shape[0]
+    
+    # Create atom37 representation with only CA atoms
+    atom37 = np.zeros([n, 37, 3], dtype=np.float32)
+    atom37_mask = np.zeros([n, 37], dtype=np.float32)
+
+    ca_index = rc.atom_order['CA']
+    atom37[:, ca_index, :] = ca_coords
+    atom37_mask[:, ca_index] = 1.0
+    
+    residue_index = np.arange(n)
+    if b_factors is None:
+        b_factors = np.zeros([n, 37])
+    if aatype is None:
+        aatype = np.zeros(n, dtype=int)
+    chain_index = np.zeros(n, dtype=int)
+    
+    return protein.Protein(
+        atom_positions=atom37,
+        atom_mask=atom37_mask,
+        aatype=aatype,
+        residue_index=residue_index,
+        b_factors=b_factors,
+        chain_index=chain_index
+    )
 

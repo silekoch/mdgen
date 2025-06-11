@@ -11,6 +11,7 @@ parser.add_argument('--tps', action='store_true')
 parser.add_argument('--xtc', action='store_true')
 parser.add_argument('--out_dir', type=str, default=".")
 parser.add_argument('--split', type=str, default='splits/4AA_test.csv')
+parser.add_argument('--c_alpha_only', action='store_true')
 args = parser.parse_args()
 
 import os, torch, mdtraj, tqdm, time
@@ -19,7 +20,8 @@ from mdgen.geometry import atom14_to_frames, atom14_to_atom37, atom37_to_torsion
 from mdgen.residue_constants import restype_order, restype_atom37_mask
 from mdgen.tensor_utils import tensor_tree_map
 from mdgen.wrapper import NewMDGenWrapper
-from mdgen.utils import atom14_to_pdb
+from mdgen.utils import atom14_to_pdb, atom1_to_pdb
+from mdgen import residue_constants as rc
 import pandas as pd
 
 
@@ -40,6 +42,13 @@ def get_batch(name, seqres, num_frames):
     atom37 = torch.from_numpy(atom14_to_atom37(arr, seqres[None])).float()
     L = len(seqres)
     mask = torch.ones(L)
+
+    if args.c_alpha_only:
+        return {
+            'c_alpha_positions': atom37[:, :, rc.atom_order['CA']],
+            'seqres': seqres,
+            'mask': mask,
+        }
     
     if args.no_frames:
         return {
@@ -59,10 +68,13 @@ def get_batch(name, seqres, num_frames):
     }
 
 def rollout(model, batch):
-
-    #print('Start sim', batch['trans'][0,0,0])
-    if args.no_frames:
-        
+    if args.c_alpha_only:
+        expanded_batch = {
+            'trans': batch['c_alpha_positions'].expand(-1, args.num_frames, -1, -1),
+            'seqres': batch['seqres'],
+            'mask': batch['mask'],
+        }
+    elif args.no_frames:
         expanded_batch = {
             'atom37': batch['atom37'].expand(-1, args.num_frames, -1, -1, -1),
             'seqres': batch['seqres'],
@@ -77,16 +89,19 @@ def rollout(model, batch):
             'seqres': batch['seqres'],
             'mask': batch['mask'],
         }
-    atom14, _ = model.inference(expanded_batch)
+    if args.c_alpha_only:
+        atom1, _ = model.inference(expanded_batch)
+    else:
+        atom14, _ = model.inference(expanded_batch)
     new_batch = {**batch}
 
-    if args.no_frames:
+    if args.c_alpha_only:
+        new_batch['trans'] = atom1
+        return atom1, new_batch
+    elif args.no_frames:
         new_batch['atom37'] = torch.from_numpy(
             atom14_to_atom37(atom14[:,-1].cpu(), batch['seqres'][0].cpu())
         ).cuda()[:,None].float()
-        
-        
-        
     else:
         frames = atom14_to_frames(atom14[:,-1])
         new_batch['trans'] = frames._trans[None]
@@ -99,7 +114,6 @@ def rollout(model, batch):
     
     
 def do(model, name, seqres):
-
     item = get_batch(name, seqres, num_frames = model.args.num_frames)
     batch = next(iter(torch.utils.data.DataLoader([item])))
 
@@ -108,15 +122,18 @@ def do(model, name, seqres):
     all_atom14 = []
     start = time.time()
     for _ in tqdm.trange(args.num_rollouts):
+        # If c_alpha_only, this is actually atom1 not atom14.
         atom14, batch = rollout(model, batch)
-        # print(atom14[0,0,0,1], atom14[0,-1,0,1])
         all_atom14.append(atom14)
 
     print(time.time() - start)
     all_atom14 = torch.cat(all_atom14, 1)
     
     path = os.path.join(args.out_dir, f'{name}.pdb')
-    atom14_to_pdb(all_atom14[0].cpu().numpy(), batch['seqres'][0].cpu().numpy(), path)
+    if args.c_alpha_only:
+        atom1_to_pdb(all_atom14[0].cpu().numpy(), batch['seqres'][0].cpu().numpy(), path)
+    else:
+        atom14_to_pdb(all_atom14[0].cpu().numpy(), batch['seqres'][0].cpu().numpy(), path)
 
     if args.xtc:
         traj = mdtraj.load(path)
