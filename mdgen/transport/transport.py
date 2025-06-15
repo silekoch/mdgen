@@ -267,11 +267,8 @@ class Transport:
             xt = xt_interpolated * x1_known_mask[..., None] + xt_integrated * (1 - x1_known_mask[..., None])
             return xt
 
-        def body_fn(x, t, model, **model_kwargs):
+        def body_fn(x, t, model, x0=None, x1_known=None, x1_known_mask=None, **model_kwargs):
             if self.args.guide_by_known:
-                x0 = model_kwargs['x0']  # This is kinda hacky, but I don't want to change the interface of the drift function for now.
-                x1_known = model_kwargs['x_cond']  # Note: In general x_cond != x1, but in our case they are the same for now. 
-                x1_known_mask = model_kwargs['x_cond_mask']
                 x = guide_by_known(x0, x, x1_known, x1_known_mask, t)
 
             model_output = drift_fn(x, t, model, **model_kwargs)

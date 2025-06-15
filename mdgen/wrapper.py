@@ -569,12 +569,19 @@ class NewMDGenWrapper(Wrapper):
         # num_steps=self.args.inference_steps)  # default to ode
 
         if self.args.guide_by_known:
-            prep['model_kwargs']['x0'] = zs
-        samples = sample_fn(
-            zs,
-            self.model.forward_inference,
-            **prep['model_kwargs'],
-        )[-1]
+            samples = sample_fn(
+                zs,
+                self.model.forward_inference,
+                x1_known = prep['model_kwargs']['x_cond'],
+                x1_known_mask = prep['model_kwargs']['x_cond_mask'],
+                **prep['model_kwargs'],
+            )[-1]
+        else:
+            samples = sample_fn(
+                zs,
+                self.model.forward_inference,
+                **prep['model_kwargs'],
+            )[-1]
 
         if self.args.c_alpha_only:
             if self.args.design: 
