@@ -173,7 +173,8 @@ class Wrapper(pl.LightningModule):
 
 
 class NewMDGenWrapper(Wrapper):
-    def __init__(self, args):
+    def __init__(self, args, guide_by_known=False):
+        args.guide_by_known = guide_by_known  # Kinda hacky, but we want to inject this only at inference time and keep the model flexible at training time. 
         super().__init__(args)
         for key in [
             'inpainting',
@@ -567,6 +568,8 @@ class NewMDGenWrapper(Wrapper):
         sample_fn = self.transport_sampler.sample_ode(sampling_method=self.args.sampling_method)
         # num_steps=self.args.inference_steps)  # default to ode
 
+        if self.args.guide_by_known:
+            prep['model_kwargs']['x0'] = zs
         samples = sample_fn(
             zs,
             self.model.forward_inference,

@@ -12,6 +12,7 @@ parser.add_argument('--xtc', action='store_true')
 parser.add_argument('--out_dir', type=str, default=".")
 parser.add_argument('--split', type=str, default='splits/4AA_test.csv')
 parser.add_argument('--c_alpha_only', action='store_true')
+parser.add_argument('--guide_by_known', action='store_true')
 args = parser.parse_args()
 
 import os, torch, mdtraj, tqdm, time
@@ -143,7 +144,7 @@ def do(model, name, seqres):
 
 @torch.no_grad()
 def main():
-    model = NewMDGenWrapper.load_from_checkpoint(args.sim_ckpt)
+    model = NewMDGenWrapper.load_from_checkpoint(args.sim_ckpt, guide_by_known=args.guide_by_known)
     model.eval().to('cuda')
     df = pd.read_csv(args.split, index_col='name')
     names = np.array(df.index)

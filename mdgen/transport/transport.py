@@ -250,7 +250,30 @@ class Transport:
         else:
             drift_fn = velocity_ode
 
+        def guide_by_known(x0, xt_integrated, x1_known, x1_known_mask, t):
+            """
+            guides the ODE by known x1 values as proposed in https://arxiv.org/abs/2201.09865
+            Args:
+                x0: initial state (batch, *dim)
+                xt_integrated: integrated state (batch, num_steps, *dim)
+                x1_known: known values of x1 (batch, *dim)
+                x1_known_mask: mask for known values of x1 (batch, *dim)
+                t: time steps (batch,)
+            Returns:
+                xt_combined: combined state (batch, num_steps, *dim)
+            """
+            _, xt_interpolated, _ = self.path_sampler.plan(t, x0, x1_known)
+
+            xt = xt_interpolated * x1_known_mask[..., None] + xt_integrated * (1 - x1_known_mask[..., None])
+            return xt
+
         def body_fn(x, t, model, **model_kwargs):
+            if self.args.guide_by_known:
+                x0 = model_kwargs['x0']  # This is kinda hacky, but I don't want to change the interface of the drift function for now.
+                x1_known = model_kwargs['x_cond']  # Note: In general x_cond != x1, but in our case they are the same for now. 
+                x1_known_mask = model_kwargs['x_cond_mask']
+                x = guide_by_known(x0, x, x1_known, x1_known_mask, t)
+
             model_output = drift_fn(x, t, model, **model_kwargs)
             assert model_output.shape == x.shape, "Output shape from ODE solver must match input shape"
             return model_output

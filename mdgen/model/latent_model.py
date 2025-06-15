@@ -360,7 +360,8 @@ class LatentMDGenModel(nn.Module):
     def forward_inference(self, x, t, mask,
                           start_frames=None, end_frames=None,
                           x_cond=None, x_cond_mask=None,
-                          aatype=None
+                          aatype=None,
+                          x0=None,
                           ):
         if not self.args.design or self.args.dynamic_mpnn or self.args.mpnn:
             return self.forward(x, t, mask, start_frames, end_frames, x_cond, x_cond_mask, aatype)
