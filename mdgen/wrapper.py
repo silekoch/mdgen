@@ -569,7 +569,8 @@ class NewMDGenWrapper(Wrapper):
 
         samples = sample_fn(
             zs,
-            partial(self.model.forward_inference, **prep['model_kwargs'])
+            self.model.forward_inference,
+            **prep['model_kwargs'],
         )[-1]
 
         if self.args.c_alpha_only:
