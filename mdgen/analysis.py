@@ -5,13 +5,6 @@ import numpy as np
 import pyemma
 from tqdm import tqdm
 
-def get_featurizer(name, sidechains=False, cossin=True):
-    feat = pyemma.coordinates.featurizer(name+'.pdb')
-    feat.add_backbone_torsions(cossin=cossin)
-    if sidechains:
-        feat.add_sidechain_torsions(cossin=cossin)
-    return feat
-    
 def get_featurized_traj(name, sidechains=False, cossin=True):
     feat = pyemma.coordinates.featurizer(name+'.pdb')
     feat.add_backbone_torsions(cossin=cossin)
