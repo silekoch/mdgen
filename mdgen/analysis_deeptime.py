@@ -47,7 +47,6 @@ def get_featurized_traj(name, sidechains=False, cossin=True):
     # Compute backbone torsions
     phi_indices, phi_angles = mdtraj.compute_phi(traj)
     psi_indices, psi_angles = mdtraj.compute_psi(traj)
-    # TODO add omega angles optionally (very nice sanity check for both the MD data as well as the generated data)
 
     # Create identifiers for the angles
     phi_identifiers = [get_backbone_angle_identifier(indices, traj) for indices in phi_indices]
@@ -80,6 +79,33 @@ def get_featurized_traj(name, sidechains=False, cossin=True):
     # Combine features
     traj_features = np.concatenate(features, axis=1)
     feature_labels = [label for sublist in feature_labels for label in sublist]  # Flatten the list of labels
+
+    # If cossin is requested, apply cosine and sine transformations
+    if cossin:
+        cos_features = np.cos(traj_features)
+        sin_features = np.sin(traj_features)
+        stacked_cossin = np.stack([cos_features, sin_features], axis=2)
+        traj_features = stacked_cossin.reshape(traj_features.shape[0], -1)
+        label_tuples = [(f'COS({label})', f'SIN({label})') for label in feature_labels]
+        feature_labels = [item for sublist in label_tuples for item in sublist]  # Flatten the list of tuples
+
+    return feature_labels, traj_features
+
+def get_featurized_omega_traj(name, cossin=True):
+    """
+    Load a trajectory and compute the omega angles, returning the features and their labels.
+    """
+    traj = mdtraj.load(name + '.xtc', top=name + '.pdb')
+
+    # Compute omega angles
+    omega_indices, omega_angles = mdtraj.compute_omega(traj)
+
+    # Create identifiers for the omega angles
+    omega_identifiers = [get_backbone_angle_identifier(indices, traj) for indices in omega_indices]
+
+    # Combine features
+    traj_features = omega_angles
+    feature_labels = omega_identifiers
 
     # If cossin is requested, apply cosine and sine transformations
     if cossin:

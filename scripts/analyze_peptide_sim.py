@@ -41,6 +41,15 @@ def main(name):
         mdgen.plots1d.plot_feature_histograms(traj, feature_labels=feats, ax=axs[0,0], color=colors[1])
         axs[0,0].set_title('BB torsions')
 
+        # Omega plotted separately as sanity check
+        omega_feats, omega_traj = mdgen.analysis_deeptime.get_featurized_omega_traj(f'{args.pdbdir}/{name}', cossin=False)
+        if args.truncate: omega_traj = omega_traj[:args.truncate]
+        omega_feats, omega_ref = mdgen.analysis_deeptime.get_featurized_omega_traj(f'{args.mddir}/{name}/{name}', cossin=False)
+        mdgen.plots1d.plot_feature_histograms(omega_ref, ax=axs[1,0], color=colors[0])
+        mdgen.plots1d.plot_feature_histograms(omega_traj, feature_labels=omega_feats, ax=axs[1,0], color=colors[1])
+        axs[1,0].set_title('OMEGA torsions')
+        axs[0,0].set_xlabel('Angle (rad)')
+        axs[1,0].set_xlabel('Angle (rad)')
     
     ### JENSEN SHANNON DISTANCES ON ALL TORSIONS
     feats, traj = mdgen.analysis_deeptime.get_featurized_traj(f'{args.pdbdir}/{name}', sidechains=True, cossin=False)
