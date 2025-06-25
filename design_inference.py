@@ -19,7 +19,7 @@ parser.add_argument('--chunk_idx', type=int, default=0)
 parser.add_argument('--n_chunks', type=int, default=1)
 parser.add_argument('--hparams_file', type=str, default=None)
 args = parser.parse_args()
-import mdgen.analysis
+import mdgen.analysis_deeptime
 import os, torch, mdtraj, tqdm
 import numpy as np
 from mdgen.geometry import atom14_to_frames, atom14_to_atom37, atom37_to_torsions
@@ -78,16 +78,16 @@ def do(model, name, seqres):
     print('doing', name)
     if os.path.exists(f'{args.out_dir}/{name}_metadata.pkl'):
         pkl_metadata = pickle.load(open(f'{args.out_dir}/{name}_metadata.pkl', 'rb'))
-        msm = pkl_metadata['msm']
+        pcca = pkl_metadata['pcca']
         cmsm = pkl_metadata['cmsm']
         ref_kmeans = pkl_metadata['ref_kmeans']
     else:
         with temp_seed(137):
-            feats, ref = mdgen.analysis.get_featurized_traj(f'{args.mddir}/{name}/{name}', sidechains=True)
-            tica, _ = mdgen.analysis.get_tica(ref)
-            kmeans, ref_kmeans = mdgen.analysis.get_kmeans(tica.transform(ref))
+            _, ref = mdgen.analysis_deeptime.get_featurized_traj(f'{args.mddir}/{name}/{name}', sidechains=True)
+            tica, _ = mdgen.analysis_deeptime.get_tica(ref)
+            kmeans, ref_kmeans = mdgen.analysis_deeptime.get_kmeans(tica.transform(ref))
             try:
-                msm, pcca, cmsm = mdgen.analysis.get_msm(ref_kmeans, nstates=10)
+                msm, pcca, cmsm = mdgen.analysis_deeptime.get_msm(ref_kmeans, nstates=10)
             except Exception as e:
                 print('ERROR', e, name, flush=True)
                 return
@@ -100,10 +100,10 @@ def do(model, name, seqres):
             'ref_kmeans': ref_kmeans,
         }, open(f'{args.out_dir}/{name}_metadata.pkl', 'wb'))
 
-    flux_mat = cmsm.transition_matrix * cmsm.pi[None, :]
+    flux_mat = cmsm.transition_matrix * cmsm.stationary_distribution[None, :]
     np.fill_diagonal(flux_mat, 0)
     start_state, end_state = np.unravel_index(np.argmax(flux_mat, axis=None), flux_mat.shape)
-    ref_discrete = msm.metastable_assignments[ref_kmeans]
+    ref_discrete = pcca.assignments[ref_kmeans]
     
     arr = np.lib.format.open_memmap(f'{args.data_dir}/{name}.npy', 'r')
     if model.args.frame_interval:
