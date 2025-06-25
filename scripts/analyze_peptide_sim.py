@@ -16,8 +16,10 @@ parser.add_argument('--num_workers', type=int, default=1)
 
 args = parser.parse_args()
 
-import mdgen.analysis
-import pyemma, tqdm, os, pickle
+import mdgen.analysis_deeptime
+import mdgen.plots1d
+import deeptime
+import tqdm, os, pickle
 from scipy.spatial.distance import jensenshannon
 from multiprocessing import Pool
 import numpy as np
@@ -32,23 +34,23 @@ def main(name):
 
     ### BACKBONE torsion marginals PLOT ONLY
     if args.plot:
-        feats, traj = mdgen.analysis.get_featurized_traj(f'{args.pdbdir}/{name}', sidechains=False, cossin=False)
+        feats, traj = mdgen.analysis_deeptime.get_featurized_traj(f'{args.pdbdir}/{name}', sidechains=False, cossin=False)
         if args.truncate: traj = traj[:args.truncate]
-        feats, ref = mdgen.analysis.get_featurized_traj(f'{args.mddir}/{name}/{name}', sidechains=False, cossin=False)
-        pyemma.plots.plot_feature_histograms(ref, feature_labels=feats, ax=axs[0,0], color=colors[0])
-        pyemma.plots.plot_feature_histograms(traj, ax=axs[0,0], color=colors[1])
+        feats, ref = mdgen.analysis_deeptime.get_featurized_traj(f'{args.mddir}/{name}/{name}', sidechains=False, cossin=False)
+        mdgen.plots1d.plot_feature_histograms(ref, ax=axs[0,0], color=colors[0])
+        mdgen.plots1d.plot_feature_histograms(traj, feature_labels=feats, ax=axs[0,0], color=colors[1])
         axs[0,0].set_title('BB torsions')
 
     
     ### JENSEN SHANNON DISTANCES ON ALL TORSIONS
-    feats, traj = mdgen.analysis.get_featurized_traj(f'{args.pdbdir}/{name}', sidechains=True, cossin=False)
+    feats, traj = mdgen.analysis_deeptime.get_featurized_traj(f'{args.pdbdir}/{name}', sidechains=True, cossin=False)
     if args.truncate: traj = traj[:args.truncate]
-    feats, ref = mdgen.analysis.get_featurized_traj(f'{args.mddir}/{name}/{name}', sidechains=True, cossin=False)
+    feats, ref = mdgen.analysis_deeptime.get_featurized_traj(f'{args.mddir}/{name}/{name}', sidechains=True, cossin=False)
 
-    out['features'] = feats.describe()
+    out['features'] = feats
 
     out['JSD'] = {}
-    for i, feat in enumerate(feats.describe()):
+    for i, feat in enumerate(feats):
         ref_p = np.histogram(ref[:,i], range=(-np.pi, np.pi), bins=100)[0]
         traj_p = np.histogram(traj[:,i], range=(-np.pi, np.pi), bins=100)[0]
         out['JSD'][feat] = jensenshannon(ref_p, traj_p)
@@ -56,14 +58,14 @@ def main(name):
     for i in [1,3]:
         ref_p = np.histogram2d(*ref[:,i:i+2].T, range=((-np.pi, np.pi),(-np.pi,np.pi)), bins=50)[0]
         traj_p = np.histogram2d(*traj[:,i:i+2].T, range=((-np.pi, np.pi),(-np.pi,np.pi)), bins=50)[0]
-        out['JSD']['|'.join(feats.describe()[i:i+2])] = jensenshannon(ref_p.flatten(), traj_p.flatten())
+        out['JSD']['|'.join(feats[i:i+2])] = jensenshannon(ref_p.flatten(), traj_p.flatten())
 
     ############ Torsion decorrelations
     if args.no_decorr:
         pass
     else:
         out['md_decorrelation'] = {}
-        for i, feat in enumerate(feats.describe()):
+        for i, feat in enumerate(feats):
             
             autocorr = acovf(np.sin(ref[:,i]), demean=False, adjusted=True, nlag=100000) + acovf(np.cos(ref[:,i]), demean=False, adjusted=True, nlag=100000)
             baseline = np.sin(ref[:,i]).mean()**2 + np.cos(ref[:,i]).mean()**2
@@ -82,7 +84,7 @@ def main(name):
         axs[0,2].set_xscale('log')
     
         out['our_decorrelation'] = {}
-        for i, feat in enumerate(feats.describe()):
+        for i, feat in enumerate(feats):
             
             autocorr = acovf(np.sin(traj[:,i]), demean=False, adjusted=True, nlag=1 if args.ito else 1000) + acovf(np.cos(traj[:,i]), demean=False, adjusted=True, nlag=1 if args.ito else 1000)
             baseline = np.sin(traj[:,i]).mean()**2 + np.cos(traj[:,i]).mean()**2
@@ -101,11 +103,11 @@ def main(name):
         axs[1,2].set_xscale('log')
 
     ####### TICA #############
-    feats, traj = mdgen.analysis.get_featurized_traj(f'{args.pdbdir}/{name}', sidechains=True, cossin=True)
+    feats, traj = mdgen.analysis_deeptime.get_featurized_traj(f'{args.pdbdir}/{name}', sidechains=True, cossin=True)
     if args.truncate: traj = traj[:args.truncate]
-    feats, ref = mdgen.analysis.get_featurized_traj(f'{args.mddir}/{name}/{name}', sidechains=True, cossin=True)
+    feats, ref = mdgen.analysis_deeptime.get_featurized_traj(f'{args.mddir}/{name}/{name}', sidechains=True, cossin=True)
 
-    tica, _ = mdgen.analysis.get_tica(ref)
+    tica, _ = mdgen.analysis_deeptime.get_tica(ref)
     ref_tica = tica.transform(ref)
     traj_tica = tica.transform(traj)
     
@@ -125,8 +127,10 @@ def main(name):
     
     #### 1,0, 1,1 TICA FES
     if args.plot:
-        pyemma.plots.plot_free_energy(*ref_tica[::100, :2].T, ax=axs[2,0], cbar=False)
-        pyemma.plots.plot_free_energy(*traj_tica[:, :2].T, ax=axs[2,1], cbar=False)
+        fes_ref = deeptime.util.energy2d(ref_tica[::100, 0], ref_tica[::100, 1])
+        fes_traj = deeptime.util.energy2d(traj_tica[:, 0], traj_tica[:, 1])
+        deeptime.plots.plot_energy2d(fes_ref, ax=axs[2,0], cbar=False, contourf_kws={'cmap': 'nipy_spectral'})
+        deeptime.plots.plot_energy2d(fes_traj, ax=axs[2,1], cbar=False, contourf_kws={'cmap': 'nipy_spectral'})
         axs[2,0].set_title('TICA FES (MD)')
         axs[2,1].set_title('TICA FES (ours)')
 
@@ -151,49 +155,42 @@ def main(name):
 
     ###### Markov state model stuff #################
     if not args.no_msm:
-        kmeans, ref_kmeans = mdgen.analysis.get_kmeans(tica.transform(ref))
+        kmeans, ref_kmeans = mdgen.analysis_deeptime.get_kmeans(tica.transform(ref))
         try:
-            msm, pcca, cmsm = mdgen.analysis.get_msm(ref_kmeans, nstates=10)
+            msm, pcca, cmsm = mdgen.analysis_deeptime.get_msm(ref_kmeans, nstates=10)
     
             out['kmeans'] = kmeans
             out['msm'] = msm
             out['pcca'] = pcca
             out['cmsm'] = cmsm
         
-            traj_discrete = mdgen.analysis.discretize(tica.transform(traj), kmeans, msm)
-            ref_discrete = mdgen.analysis.discretize(tica.transform(ref), kmeans, msm)
+            traj_discrete = mdgen.analysis_deeptime.discretize(tica.transform(traj), kmeans, pcca)
+            ref_discrete = mdgen.analysis_deeptime.discretize(tica.transform(ref), kmeans, pcca)
             out['traj_metastable_probs'] = (traj_discrete == np.arange(10)[:,None]).mean(1)
             out['ref_metastable_probs'] = (ref_discrete == np.arange(10)[:,None]).mean(1)
             ######### 
         
-            msm_transition_matrix = np.eye(10)
-            for a, i in enumerate(cmsm.active_set):
-                for b, j in enumerate(cmsm.active_set):
-                    msm_transition_matrix[i,j] = cmsm.transition_matrix[a,b]
-    
+            msm_transition_matrix = mdgen.analysis_deeptime.get_full_transition_matrix(cmsm)
+
             out['msm_transition_matrix'] = msm_transition_matrix
-            out['pcca_pi'] = pcca._pi_coarse
+            out['pcca_pi'] = pcca.coarse_grained_stationary_probability
         
             msm_pi = np.zeros(10)
-            msm_pi[cmsm.active_set] = cmsm.pi
+            msm_pi[cmsm.state_symbols()] = cmsm.stationary_distribution
+
             out['msm_pi'] = msm_pi
             
             if args.no_traj_msm:
                 pass
             else:
-                
-                traj_msm = pyemma.msm.estimate_markov_model(traj_discrete, lag=args.msm_lag)
+                traj_msm = deeptime.markov.msm.MaximumLikelihoodMSM(lagtime=args.msm_lag).fit(traj_discrete).fetch_model()
                 out['traj_msm'] = traj_msm
         
-                traj_transition_matrix = np.eye(10)
-                for a, i in enumerate(traj_msm.active_set):
-                    for b, j in enumerate(traj_msm.active_set):
-                        traj_transition_matrix[i,j] = traj_msm.transition_matrix[a,b]
+                traj_transition_matrix = mdgen.analysis_deeptime.get_full_transition_matrix(traj_msm)
                 out['traj_transition_matrix'] = traj_transition_matrix
-                
             
                 traj_pi = np.zeros(10)
-                traj_pi[traj_msm.active_set] = traj_msm.pi
+                traj_pi[traj_msm.state_symbols()] = traj_msm.stationary_distribution
                 out['traj_pi'] = traj_pi
                 
         except Exception as e:
