@@ -190,6 +190,14 @@ class NewMDGenWrapper(Wrapper):
             'dynamic_mpnn',
             'no_offsets',
             'no_frames',
+            'translations_only',
+            'c_alpha_only',
+            'prepend_aatype_to_emb',
+            'overwrite_ipa_with_linear',
+            'prepend_schnet',
+            'bottleneck_attention',
+            'no_rope_in_pos',
+            'supervise_no_rotations',
         ]:
             if not hasattr(args, key):
                 setattr(args, key, False)
