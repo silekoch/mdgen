@@ -41,6 +41,20 @@ def get_sidechain_angle_identifier(atom_indices, traj):
 
     return f'CHI{chi_index} {chainID} {residue_name} {residue_index}'
 
+def convert_featurized_traj_to_cossin(feature_labels, traj_features):
+    cos_features = np.cos(traj_features)
+    sin_features = np.sin(traj_features)
+
+    # Interleave cos and sin features
+    stacked_cossin = np.stack([cos_features, sin_features], axis=2)
+    traj_features = stacked_cossin.reshape(traj_features.shape[0], -1)
+
+    # Create labels for cos and sin features
+    label_tuples = [(f'COS({label})', f'SIN({label})') for label in feature_labels]
+    feature_labels = [item for sublist in label_tuples for item in sublist]  # Flatten the list of tuples
+
+    return feature_labels, traj_features
+
 def get_featurized_traj(name, sidechains=False, cossin=True):
     traj = mdtraj.load(name + '.xtc', top=name + '.pdb')
     
@@ -80,14 +94,8 @@ def get_featurized_traj(name, sidechains=False, cossin=True):
     traj_features = np.concatenate(features, axis=1)
     feature_labels = [label for sublist in feature_labels for label in sublist]  # Flatten the list of labels
 
-    # If cossin is requested, apply cosine and sine transformations
     if cossin:
-        cos_features = np.cos(traj_features)
-        sin_features = np.sin(traj_features)
-        stacked_cossin = np.stack([cos_features, sin_features], axis=2)
-        traj_features = stacked_cossin.reshape(traj_features.shape[0], -1)
-        label_tuples = [(f'COS({label})', f'SIN({label})') for label in feature_labels]
-        feature_labels = [item for sublist in label_tuples for item in sublist]  # Flatten the list of tuples
+        feature_labels, traj_features = convert_featurized_traj_to_cossin(feature_labels, traj_features)
 
     return feature_labels, traj_features
 
@@ -107,15 +115,10 @@ def get_featurized_omega_traj(name, cossin=True):
     traj_features = omega_angles
     feature_labels = omega_identifiers
 
-    # If cossin is requested, apply cosine and sine transformations
     if cossin:
-        cos_features = np.cos(traj_features)
-        sin_features = np.sin(traj_features)
-        stacked_cossin = np.stack([cos_features, sin_features], axis=2)
-        traj_features = stacked_cossin.reshape(traj_features.shape[0], -1)
-        label_tuples = [(f'COS({label})', f'SIN({label})') for label in feature_labels]
-        feature_labels = [item for sublist in label_tuples for item in sublist]  # Flatten the list of tuples
+        feature_labels, traj_features = convert_featurized_traj_to_cossin(feature_labels, traj_features)
 
+    return feature_labels, traj_features
     return feature_labels, traj_features
 
 def get_tica(traj, lag=1000):
