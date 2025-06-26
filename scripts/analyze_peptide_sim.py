@@ -50,6 +50,14 @@ def main(name):
         axs[1,0].set_title('OMEGA torsions')
         axs[0,0].set_xlabel('Angle (rad)')
         axs[1,0].set_xlabel('Angle (rad)')
+
+        # C-alpha dihedrals
+        _, ca_traj = mdgen.analysis_deeptime.get_featurized_c_alpha_traj(f'{args.pdbdir}/{name}', cossin=False)
+        if args.truncate: ca_traj = ca_traj[:args.truncate]
+        _, ca_ref = mdgen.analysis_deeptime.get_featurized_c_alpha_traj(f'{args.mddir}/{name}/{name}', cossin=False)
+        mdgen.plots1d.plot_feature_histograms(ca_ref, ax=axs[2,2], color=colors[0])
+        mdgen.plots1d.plot_feature_histograms(ca_traj, ax=axs[2,2], color=colors[1])
+        axs[2,2].set_title('C-alpha dihedrals')
     
     ### JENSEN SHANNON DISTANCES ON ALL TORSIONS
     feats, traj = mdgen.analysis_deeptime.get_featurized_traj(f'{args.pdbdir}/{name}', sidechains=True, cossin=False)

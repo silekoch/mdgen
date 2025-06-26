@@ -119,6 +119,21 @@ def get_featurized_omega_traj(name, cossin=True):
         feature_labels, traj_features = convert_featurized_traj_to_cossin(feature_labels, traj_features)
 
     return feature_labels, traj_features
+
+def get_featurized_c_alpha_traj(name, cossin=True):
+    traj = mdtraj.load(name + '.xtc', top=name + '.pdb')
+    ca_indices = traj.topology.select('name CA')
+
+    dihedral_indices = np.array([ca_indices[i:i+4] for i in range(len(ca_indices) - 3)])
+    dihedral_angles = mdtraj.compute_dihedrals(traj, dihedral_indices)
+    dihedral_identifiers = [f'CA_DIHEDRAL_{i}' for i in range(dihedral_angles.shape[1])]
+    
+    traj_features = dihedral_angles
+    feature_labels = dihedral_identifiers
+
+    if cossin:
+        feature_labels, traj_features = convert_featurized_traj_to_cossin(feature_labels, traj_features)
+    
     return feature_labels, traj_features
 
 def get_tica(traj, lag=1000):
