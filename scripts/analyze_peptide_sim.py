@@ -37,6 +37,7 @@ def main(name):
         feats, traj = mdgen.analysis_deeptime.get_featurized_traj(f'{args.pdbdir}/{name}', sidechains=False, cossin=False)
         if args.truncate: traj = traj[:args.truncate]
         feats, ref = mdgen.analysis_deeptime.get_featurized_traj(f'{args.mddir}/{name}/{name}', sidechains=False, cossin=False)
+        feats = [feat.split(' ', 2)[0] + ' ' + feat.split(' ', 2)[-1] for feat in feats]  # Cut out chain ID
         mdgen.plots1d.plot_feature_histograms(ref, ax=axs[0,0], color=colors[0])
         mdgen.plots1d.plot_feature_histograms(traj, feature_labels=feats, ax=axs[0,0], color=colors[1])
         axs[0,0].set_title('BB torsions')
@@ -46,6 +47,7 @@ def main(name):
         if args.truncate: omega_traj = omega_traj[:args.truncate]
         omega_feats, omega_ref = mdgen.analysis_deeptime.get_featurized_omega_traj(f'{args.mddir}/{name}/{name}', cossin=False)
         mdgen.plots1d.plot_feature_histograms(omega_ref, ax=axs[1,0], color=colors[0])
+        omega_feats = [feat.split(' ', 2)[-1] for feat in omega_feats]  # Cut out angle name and chain ID
         mdgen.plots1d.plot_feature_histograms(omega_traj, feature_labels=omega_feats, ax=axs[1,0], color=colors[1])
         axs[1,0].set_title('OMEGA torsions')
         axs[0,0].set_xlabel('Angle (rad)')
@@ -58,6 +60,7 @@ def main(name):
         mdgen.plots1d.plot_feature_histograms(ca_ref, ax=axs[2,2], color=colors[0])
         mdgen.plots1d.plot_feature_histograms(ca_traj, ax=axs[2,2], color=colors[1])
         axs[2,2].set_title('C-alpha dihedrals')
+        axs[2,2].set_xlabel('Angle (rad)')
     
     ### JENSEN SHANNON DISTANCES ON ALL TORSIONS
     feats, traj = mdgen.analysis_deeptime.get_featurized_traj(f'{args.pdbdir}/{name}', sidechains=True, cossin=False)
