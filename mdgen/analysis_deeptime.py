@@ -120,7 +120,7 @@ def get_featurized_omega_traj(name, cossin=True):
 
     return feature_labels, traj_features
 
-def get_featurized_c_alpha_traj(name, cossin=True):
+def get_featurized_ca_traj(name, cossin=True):
     traj = mdtraj.load(name + '.xtc', top=name + '.pdb')
     ca_indices = traj.topology.select('name CA')
 
