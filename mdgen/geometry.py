@@ -238,8 +238,8 @@ def atom14_to_frames(atom14):
     rots = Rotation(rot_mats=rots)
     return prot_frames.compose(Rigid(rots, None))
     
-
-
+def atom14_to_ca(atom14):
+    return atom14[..., rc.atom_order['CA'], :]
 
 def frames_and_literature_positions_to_atom14_pos(
     r: Rigid,
