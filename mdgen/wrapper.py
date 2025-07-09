@@ -358,39 +358,46 @@ class NewMDGenWrapper(Wrapper):
 
 
     def prep_batch_c_alpha_only(self, batch):
-        c_alpha_positions = batch['trans']
-        B, T, L, _ = c_alpha_positions.shape
+        ca_coordinates = batch['ca_coordinates']  # Shape (B, T, L, 3)
+        B, T, L, _ = ca_coordinates.shape
+
+        key_frames = Rigid(
+            trans=batch['key_frame_trans'],
+            rots=Rotation(rot_mats=batch['key_frame_rots'])
+        )  # B, K, L
         
         if self.args.no_offsets:
-            latents = c_alpha_positions
+            latents = ca_coordinates
+            initial_rigids = None
         else:
-            latents = c_alpha_positions - c_alpha_positions[:, 0:1]
-        
-        loss_mask = batch['mask'].unsqueeze(1).unsqueeze(-1).expand(B, T, L, 3)
+            latents = key_frames.invert_apply(ca_coordinates)
+            initial_rigids = key_frames[:, 0]
 
-        if self.args.tps_condition or self.args.inpainting or self.args.dynamic_mpnn:
-            raise NotImplementedError()
+        loss_mask = batch['mask'].unsqueeze(1).unsqueeze(-1).expand(B, T, L, 3)
 
         cond_mask = torch.zeros(B, T, L, dtype=int, device=latents.device)
         if self.args.sim_condition:
             cond_mask[:, 0] = 1
-        if self.args.tps_condition:
-            cond_mask[:, 0] = cond_mask[:, -1] = 1
-        if self.args.cond_interval:
-            cond_mask[:, ::self.args.cond_interval] = 1
-        if self.args.inpainting or self.args.dynamic_mpnn or self.args.mpnn:
-            cond_mask[:, :, COND_IDX] = 1
+            aatype_mask = torch.ones_like(batch['seqres'])
+        else:
+            raise NotImplementedError()
 
-        aatype_mask = torch.ones_like(batch['seqres'])
-        if self.args.design:
-            aatype_mask[:, DESIGN_IDX] = 0
+        if self.args.prepend_ipa:
+            # In this case initial_rigids == start_frames, but they are not the same. 
+            # initial_rigids is used for reconstruction at inference time. 
+            # start_frames is given to the model as conditiong.
+            start_frames = key_frames[:, 0]  # Backbone frames for IPA
+        elif self.args.prepend_schnet:
+            start_frames = ca_coordinates[:, 0]  # Absolute positions for SchNet
+        else:
+            start_frames = None  # No conditioning for everything else
 
         return {
             'latents': latents,
             'loss_mask': loss_mask,
+            'initial_rigids': initial_rigids,
             'model_kwargs': {
-                'start_frames': c_alpha_positions[:, 0],
-                'end_frames': c_alpha_positions[:, -1],
+                'start_frames': start_frames,
                 'mask': batch['mask'].unsqueeze(1).expand(-1, T, -1),
                 'aatype': torch.where(aatype_mask.bool(), batch['seqres'], 20),
                 'x_cond': torch.where(cond_mask.unsqueeze(-1).bool(), latents, 0.0),
@@ -590,16 +597,16 @@ class NewMDGenWrapper(Wrapper):
             )[-1]
 
         if self.args.c_alpha_only:
-            if self.args.design: 
+            if not self.args.sim_condition: 
                 raise NotImplementedError("See code below for design handling")
             aa_out = batch['seqres'][:, None].expand(B, T, L)
 
             if self.args.no_offsets:
                 return samples, aa_out
             else:
-                initial_positions = prep['model_kwargs']['start_frames']
-                return initial_positions + samples, aa_out
-
+                initial_rigids = prep['initial_rigids']
+                return initial_rigids.apply(samples), aa_out
+                
         if self.args.no_frames:
             atom14 = atom37_to_atom14(
                 samples.cpu().numpy().reshape(B, T, L, 37, 3),

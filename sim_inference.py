@@ -17,7 +17,7 @@ args = parser.parse_args()
 
 import os, torch, mdtraj, tqdm, time
 import numpy as np
-from mdgen.geometry import atom14_to_frames, atom14_to_atom37, atom37_to_torsions
+from mdgen.geometry import atom14_to_ca, atom14_to_frames, atom14_to_atom37, atom37_to_torsions, ca_to_frames
 from mdgen.residue_constants import restype_order, restype_atom37_mask
 from mdgen.tensor_utils import tensor_tree_map
 from mdgen.wrapper import NewMDGenWrapper
@@ -45,8 +45,12 @@ def get_batch(name, seqres, num_frames):
     mask = torch.ones(L)
 
     if args.c_alpha_only:
+        ca_coordinates = atom14_to_ca(torch.from_numpy(arr))
+        key_frames = ca_to_frames(ca_coordinates[0:1])
         return {
-            'c_alpha_positions': atom37[:, :, rc.atom_order['CA']],
+            'ca_coordinates': ca_coordinates,
+            'key_frame_rots': key_frames._rots._rot_mats,
+            'key_frame_trans': key_frames._trans,
             'seqres': seqres,
             'mask': mask,
         }
@@ -69,9 +73,13 @@ def get_batch(name, seqres, num_frames):
     }
 
 def rollout(model, batch):
+    # Blow up batch consisting of a single frame to a full trajectory, 
+    # by reusing the frame along the time axis.
     if args.c_alpha_only:
         expanded_batch = {
-            'trans': batch['c_alpha_positions'].expand(-1, args.num_frames, -1, -1),
+            'ca_coordinates': batch['ca_coordinates'].expand(-1, args.num_frames, -1, -1),
+            'key_frame_rots': batch['key_frame_rots'].expand(-1, args.num_frames, -1, -1, -1),
+            'key_frame_trans': batch['key_frame_trans'].expand(-1, args.num_frames, -1, -1),
             'seqres': batch['seqres'],
             'mask': batch['mask'],
         }
@@ -90,51 +98,31 @@ def rollout(model, batch):
             'seqres': batch['seqres'],
             'mask': batch['mask'],
         }
-    if args.c_alpha_only:
-        atom1, _ = model.inference(expanded_batch)
-    else:
-        atom14, _ = model.inference(expanded_batch)
-    new_batch = {**batch}
 
-    if args.c_alpha_only:
-        new_batch['trans'] = atom1
-        return atom1, new_batch
-    elif args.no_frames:
-        new_batch['atom37'] = torch.from_numpy(
-            atom14_to_atom37(atom14[:,-1].cpu(), batch['seqres'][0].cpu())
-        ).cuda()[:,None].float()
-    else:
-        frames = atom14_to_frames(atom14[:,-1])
-        new_batch['trans'] = frames._trans[None]
-        new_batch['rots'] = frames._rots._rot_mats[None]
-        atom37 = atom14_to_atom37(atom14[0,-1].cpu(), batch['seqres'][0].cpu())
-        torsions, _ = atom37_to_torsions(atom37, batch['seqres'][0].cpu())
-        new_batch['torsions'] = torsions[None, None].cuda()
-
-    return atom14, new_batch
+    return model.inference(expanded_batch)
     
     
 def do(model, name, seqres):
     item = get_batch(name, seqres, num_frames = model.args.num_frames)
     batch = next(iter(torch.utils.data.DataLoader([item])))
 
-    batch = tensor_tree_map(lambda x: x.cuda(), batch)  
+    batch = tensor_tree_map(lambda x: x.cuda(), batch)
     
-    all_atom14 = []
+    all_trajs = []
     start = time.time()
     for _ in tqdm.trange(args.num_rollouts):
-        # If c_alpha_only, this is actually atom1 not atom14.
-        atom14, batch = rollout(model, batch)
-        all_atom14.append(atom14)
+        traj_out, _ = rollout(model, batch)
+        all_trajs.append(traj_out[0])
 
     print(time.time() - start)
-    all_atom14 = torch.cat(all_atom14, 1)
+    all_trajs = torch.cat(all_trajs).cpu().numpy()
+    aatype = np.array([restype_order[c] for c in seqres])
     
     path = os.path.join(args.out_dir, f'{name}.pdb')
     if args.c_alpha_only:
-        atom1_to_pdb(all_atom14[0].cpu().numpy(), batch['seqres'][0].cpu().numpy(), path)
+        atom1_to_pdb(all_trajs, aatype, path)
     else:
-        atom14_to_pdb(all_atom14[0].cpu().numpy(), batch['seqres'][0].cpu().numpy(), path)
+        atom14_to_pdb(all_trajs, aatype, path)
 
     if args.xtc:
         traj = mdtraj.load(path)

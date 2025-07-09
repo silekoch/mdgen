@@ -4,7 +4,8 @@ from .rigid_utils import Rigid
 from .residue_constants import restype_order
 import numpy as np
 import pandas as pd
-from .geometry import atom37_to_torsions, atom14_to_atom37, atom14_to_frames
+from .geometry import atom37_to_torsions, atom14_to_atom37, atom14_to_frames, \
+    atom14_to_ca, ca_to_frames
        
 class MDGenDataset(torch.utils.data.Dataset):
     def __init__(self, args, split, repeat=1):
@@ -60,12 +61,20 @@ class MDGenDataset(torch.utils.data.Dataset):
             arr[1:] = arr[0]
 
         # arr should be in ANGSTROMS
-        frames = atom14_to_frames(torch.from_numpy(arr))
+        if self.args.c_alpha_only:
+            ca_coordinates = atom14_to_ca(torch.from_numpy(arr))
+            if self.args.sim_condition:
+                key_frames = ca_to_frames(ca_coordinates[0:1])
+            else:
+                NotImplementedError("C-alpha-only mode only implemented for " \
+                "sim condition")
+        else:
+            frames = atom14_to_frames(torch.from_numpy(arr))
         seqres = np.array([restype_order[c] for c in seqres])
         aatype = torch.from_numpy(seqres)[None].expand(self.args.num_frames, -1)
         atom37 = torch.from_numpy(atom14_to_atom37(arr, aatype)).float()
         
-        L = frames.shape[1]
+        L = arr.shape[1]
         mask = np.ones(L, dtype=np.float32)
 
         if self.args.translations_only:
@@ -110,6 +119,16 @@ class MDGenDataset(torch.utils.data.Dataset):
                 torsions = torch.cat([torsions, torch.zeros((torsions.shape[0], pad, 7, 2), dtype=torch.float32)], 1)
                 torsion_mask = torch.cat([torsion_mask, torch.zeros((pad, 7), dtype=torch.float32)])
 
+        if self.args.c_alpha_only:
+            return {
+                'name': full_name,
+                'frame_start': frame_start,
+                'ca_coordinates': ca_coordinates,
+                'key_frame_rots': key_frames._rots._rot_mats,
+                'key_frame_trans': key_frames._trans,
+                'seqres': seqres,
+                'mask': mask, # (L,)
+            }
         return {
             'name': full_name,
             'frame_start': frame_start,
