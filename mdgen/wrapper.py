@@ -607,7 +607,7 @@ class NewMDGenWrapper(Wrapper):
                 samples.cpu().numpy().reshape(B, T, L, 37, 3),
                 batch['seqres'][0].cpu().numpy()
             )
-            return torch.from_numpy(atom14).float(), None
+            return torch.from_numpy(atom14).float(), batch['seqres'][:, None].expand(B, T, L)
             
         offsets = samples[..., :7]
         
