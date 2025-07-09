@@ -241,6 +241,32 @@ def atom14_to_frames(atom14):
 def atom14_to_ca(atom14):
     return atom14[..., rc.atom_order['CA'], :]
 
+def ca_to_frames(ca_coords):
+    """Creates pseudo frames from CA coordinates.
+    
+    All CA frames are constructed with the CA atom at the origin. 
+    Where possible, the previous CA atom is used as the x-axis, 
+    and the next CA atom as the point in the xy-plane. 
+    For the first and last CA atoms the next closest atom left in the chain 
+    is used to fill the missing point.
+    I.e. the frame for the first CA atom has the third CA as the x-axis 
+    and the last CA has the second to last CA as the xy-plane point.
+    
+    CA indices lined up for the frames (one column per frame):
+    [3, 1, 2, ..., n-2, n-1]  # Neg x axis atom
+    [1, 2, 3, ..., n-1,   n]  # Origin atom
+    [2, 3, 4, ...,   n, n-2]  # p_xy_plane atom
+    """
+    ca1_coords = torch.cat([ca_coords[:,-1:], ca_coords[:,:-1]], dim=1)
+    ca2_coords = ca_coords
+    ca3_coords = torch.cat([ca_coords[:,1:], ca_coords[:,-2:-1]], dim=1)
+    ca_frames = Rigid.from_3_points(
+        ca1_coords,
+        ca2_coords,
+        ca3_coords,
+    )
+    return ca_frames
+
 def frames_and_literature_positions_to_atom14_pos(
     r: Rigid,
     aatype: torch.Tensor,
