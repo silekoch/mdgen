@@ -542,11 +542,9 @@ class NewMDGenWrapper(Wrapper):
         prep = self.prep_batch(batch)
 
         latents = prep['latents']
+        B, T, L, _ = latents.shape
         if not self.args.no_frames and not self.args.c_alpha_only:
             rigids = prep['rigids']
-            B, T, L = rigids.shape
-        else:
-            B, T, L, _ = latents.shape
 
         ### oracle
         # if self.args.oracle:
