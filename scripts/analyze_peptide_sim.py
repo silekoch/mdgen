@@ -34,7 +34,7 @@ colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
 def main(name):
     out = {}
     np.random.seed(137)
-    fig, axs = plt.subplots(4, 4, figsize=(20, 20))
+    fig, axs = plt.subplots(6, 4, figsize=(20, 30))
 
     ### BACKBONE torsion marginals PLOT ONLY
     if args.plot and not args.c_alpha_only:
@@ -61,14 +61,36 @@ def main(name):
 
     if args.plot:
         # CA dihedrals
-        ca_feats, ca_traj = mdgen.analysis_deeptime.get_featurized_ca_traj(f'{args.pdbdir}/{name}', cossin=False)
-        if args.truncate: ca_traj = ca_traj[:args.truncate]
-        ca_feats, ca_ref = mdgen.analysis_deeptime.get_featurized_ca_traj(f'{args.mddir}/{name}/{name}', cossin=False)
-        if args.truncate_ref: ca_ref = ca_ref[:args.truncate_ref:args.stride_ref]
-        mdgen.plots1d.plot_feature_histograms(ca_ref, ax=axs[2,2], color=colors[0])
-        mdgen.plots1d.plot_feature_histograms(ca_traj, ax=axs[2,2], color=colors[1])
-        axs[2,2].set_title('CA dihedrals')
-        axs[2,2].set_xlabel('Angle (rad)')
+        ca_torsion_feats, ca_torsion_traj = mdgen.analysis_deeptime.get_featurized_ca_traj(f'{args.pdbdir}/{name}', cossin=False)
+        if args.truncate: ca_torsion_traj = ca_torsion_traj[:args.truncate]
+        ca_torsion_feats, ca_torsion_ref = mdgen.analysis_deeptime.get_featurized_ca_traj(f'{args.mddir}/{name}/{name}', cossin=False)
+        if args.truncate_ref: ca_torsion_ref = ca_torsion_ref[:args.truncate_ref:args.stride_ref]
+        mdgen.plots1d.plot_feature_histograms(ca_torsion_ref, ax=axs[3,0], color=colors[0])
+        mdgen.plots1d.plot_feature_histograms(ca_torsion_traj, ax=axs[3,0], color=colors[1])
+        axs[3,0].set_title('CA dihedrals')
+        axs[3,0].set_xlabel('Angle (rad)')
+
+        # CA bond lengths
+        ca_bond_feats, ca_bond_traj = mdgen.analysis_deeptime.get_featurized_ca_bonds_traj(f'{args.pdbdir}/{name}')
+        if args.truncate: ca_bond_traj = ca_bond_traj[:args.truncate]
+        _, ca_bond_ref = mdgen.analysis_deeptime.get_featurized_ca_bonds_traj(f'{args.mddir}/{name}/{name}')
+        if args.truncate_ref: ca_bond_ref = ca_bond_ref[:args.truncate_ref:args.stride_ref]
+        
+        mdgen.plots1d.plot_feature_histograms(ca_bond_ref, ax=axs[3,1], color=colors[0])
+        mdgen.plots1d.plot_feature_histograms(ca_bond_traj, ax=axs[3,1], color=colors[1])
+        axs[3,1].set_title('CA Bond Lengths')
+        axs[3,1].set_xlabel('Distance (nm)')
+        
+        # CA bond angles
+        ca_angle_feats, ca_angle_traj = mdgen.analysis_deeptime.get_featurized_ca_angles_traj(f'{args.pdbdir}/{name}', cossin=False)
+        if args.truncate: ca_angle_traj = ca_angle_traj[:args.truncate]
+        _, ca_angle_ref = mdgen.analysis_deeptime.get_featurized_ca_angles_traj(f'{args.mddir}/{name}/{name}', cossin=False)
+        if args.truncate_ref: ca_angle_ref = ca_angle_ref[:args.truncate_ref:args.stride_ref]
+        
+        mdgen.plots1d.plot_feature_histograms(ca_angle_ref, ax=axs[3,2], color=colors[0])
+        mdgen.plots1d.plot_feature_histograms(ca_angle_traj, ax=axs[3,2], color=colors[1])
+        axs[3,2].set_title('CA Bond Angles')
+        axs[3,2].set_xlabel('Angle (rad)')
     
     ### JENSEN SHANNON DISTANCES ON ALL TORSIONS
     out['JSD'] = {}
@@ -76,7 +98,7 @@ def main(name):
         feats, traj = mdgen.analysis_deeptime.get_featurized_traj(f'{args.pdbdir}/{name}', sidechains=True, cossin=False)
         if args.truncate: traj = traj[:args.truncate]
         feats, ref = mdgen.analysis_deeptime.get_featurized_traj(f'{args.mddir}/{name}/{name}', sidechains=True, cossin=False)
-        if args.truncate_ref: ca_ref = ca_ref[:args.truncate_ref:args.stride_ref]
+        if args.truncate_ref: ref = ref[:args.truncate_ref:args.stride_ref]
 
         out['features'] = feats
 
@@ -107,13 +129,27 @@ def main(name):
             out['JSD']['|'.join([i_name, j_name])] = jensenshannon(ref_p.flatten(), traj_p.flatten())
 
     ### JENSEN SHANNON DISTANCE ON C-ALPHA
-    out['features_ca'] = ca_feats
+    out['features_ca_torsion'] = ca_torsion_feats
+    out['features_ca_bonds'] = ca_bond_feats
+    out['features_ca_angles'] = ca_angle_feats
 
-    out['JSD_ca'] = {}
-    for i, ca_feat in enumerate(ca_feats):
-        ref_p = np.histogram(ca_ref[:,i], range=(-np.pi, np.pi), bins=100)[0]
-        traj_p = np.histogram(ca_traj[:,i], range=(-np.pi, np.pi), bins=100)[0]
+    for i, ca_feat in enumerate(ca_torsion_feats):
+        ref_p = np.histogram(ca_torsion_ref[:,i], range=(-np.pi, np.pi), bins=100)[0]
+        traj_p = np.histogram(ca_torsion_traj[:,i], range=(-np.pi, np.pi), bins=100)[0]
         out['JSD'][ca_feat] = jensenshannon(ref_p, traj_p)
+
+    ### JENSEN SHANNON DISTANCE ON CA BONDS
+    for i, bond_feat in enumerate(ca_bond_feats):
+        # Use appropriate range for bond lengths (typically 0.35-0.4 nm for CA-CA)
+        ref_p = np.histogram(ca_bond_ref[:,i], range=(0.3, 0.5), bins=100)[0]
+        traj_p = np.histogram(ca_bond_traj[:,i], range=(0.3, 0.5), bins=100)[0]
+        out['JSD'][bond_feat] = jensenshannon(ref_p, traj_p)
+
+    ### JENSEN SHANNON DISTANCE ON CA ANGLES
+    for i, angle_feat in enumerate(ca_angle_feats):
+        ref_p = np.histogram(ca_angle_ref[:,i], range=(0, np.pi), bins=100)[0]
+        traj_p = np.histogram(ca_angle_traj[:,i], range=(0, np.pi), bins=100)[0]
+        out[angle_feat] = jensenshannon(ref_p, traj_p)
 
     ############ Torsion decorrelations
     out['md_decorrelation'] = {}
@@ -121,6 +157,7 @@ def main(name):
     if args.no_decorr or args.c_alpha_only:
         pass
     else:
+        #### Reference backbone decorrelations
         for i, feat in enumerate(feats):
             nlag = 100000 if not args.truncate_ref else args.truncate_ref / args.stride_ref - 2
             autocorr = acovf(np.sin(ref[:,i]), demean=False, adjusted=True, nlag=nlag) + acovf(np.cos(ref[:,i]), demean=False, adjusted=True, nlag=nlag)
@@ -139,6 +176,7 @@ def main(name):
         axs[0,1].set_xscale('log')
         axs[0,2].set_xscale('log')
     
+        #### Generated backbone decorrelations
         for i, feat in enumerate(feats):
             
             autocorr = acovf(np.sin(traj[:,i]), demean=False, adjusted=True, nlag=1 if args.ito else 1000) + acovf(np.cos(traj[:,i]), demean=False, adjusted=True, nlag=1 if args.ito else 1000)
@@ -160,27 +198,75 @@ def main(name):
     if args.no_decorr:
         pass
     else:
-        for i, feat in enumerate(ca_feats):
+        for i, feat in enumerate(ca_torsion_feats):
             nlag = 100000 if not args.truncate_ref else args.truncate_ref / args.stride_ref - 2
-            autocorr = acovf(np.sin(ca_ref[:,i]), demean=False, adjusted=True, nlag=nlag) + acovf(np.cos(ca_ref[:,i]), demean=False, adjusted=True, nlag=nlag)
-            baseline = np.sin(ca_ref[:,i]).mean()**2 + np.cos(ca_ref[:,i]).mean()**2
+            autocorr = acovf(np.sin(ca_torsion_ref[:,i]), demean=False, adjusted=True, nlag=nlag) + acovf(np.cos(ca_torsion_ref[:,i]), demean=False, adjusted=True, nlag=nlag)
+            baseline = np.sin(ca_torsion_ref[:,i]).mean()**2 + np.cos(ca_torsion_ref[:,i]).mean()**2
             lags = 1 + np.arange(len(autocorr))
-            axs[3,1].plot(lags, (autocorr - baseline) / (1-baseline), color=colors[i%len(colors)])
+            axs[4,0].plot(lags, (autocorr - baseline) / (1-baseline), color=colors[i%len(colors)])
             out['md_decorrelation'][feat] = (autocorr.astype(np.float16) - baseline) / (1-baseline)
            
-        axs[3,1].set_title('CA decorrelation')
-        axs[3,1].set_xscale('log')
+        axs[4,0].set_title('Ref CA torsion decorrelation')
+        axs[4,0].set_xscale('log')
 
-        for i, feat in enumerate(ca_feats):
-            autocorr = acovf(np.sin(ca_traj[:,i]), demean=False, adjusted=True, nlag=1 if args.ito else 1000) + acovf(np.cos(ca_traj[:,i]), demean=False, adjusted=True, nlag=1 if args.ito else 1000)
-            baseline = np.sin(ca_traj[:,i]).mean()**2 + np.cos(ca_traj[:,i]).mean()**2
+        for i, feat in enumerate(ca_torsion_feats):
+            autocorr = acovf(np.sin(ca_torsion_traj[:,i]), demean=False, adjusted=True, nlag=1 if args.ito else 1000) + acovf(np.cos(ca_torsion_traj[:,i]), demean=False, adjusted=True, nlag=1 if args.ito else 1000)
+            baseline = np.sin(ca_torsion_traj[:,i]).mean()**2 + np.cos(ca_torsion_traj[:,i]).mean()**2
             lags = 1 + np.arange(len(autocorr))
-            axs[3,2].plot(lags, (autocorr - baseline) / (1-baseline), color=colors[i%len(colors)])
+            axs[5,0].plot(lags, (autocorr - baseline) / (1-baseline), color=colors[i%len(colors)])
     
             out['our_decorrelation'][feat] = (autocorr.astype(np.float16) - baseline) / (1-baseline)
     
-        axs[3,2].set_title('CA decorrelation')
-        axs[3,2].set_xscale('log')
+        axs[5,0].set_title('Gen CA torsion decorrelation')
+        axs[5,0].set_xscale('log')
+
+        # Bond length decorrelations (MD reference)
+        for i, bond_feat in enumerate(ca_bond_feats):
+            nlag = 100000 if not args.truncate_ref else args.truncate_ref // args.stride_ref - 2
+            # For bond lengths, we use the values directly (no sin/cos transformation)
+            autocorr = acovf(ca_bond_ref[:,i], demean=False, adjusted=True, nlag=nlag)
+            baseline = ca_bond_ref[:,i].mean()**2
+            lags = 1 + np.arange(len(autocorr))
+            axs[4,1].plot(lags, (autocorr - baseline) / (ca_bond_ref[:,i].var()), color=colors[i%len(colors)])
+            out['md_decorrelation'][bond_feat] = (autocorr.astype(np.float16) - baseline) / (ca_bond_ref[:,i].var())
+        
+        axs[4,1].set_title('CA Bond Length Decorrelation (MD)')
+        axs[4,1].set_xscale('log')
+        
+        # Bond length decorrelations (generated trajectories)
+        for i, bond_feat in enumerate(ca_bond_feats):
+            autocorr = acovf(ca_bond_traj[:,i], demean=False, adjusted=True, nlag=1 if args.ito else 1000)
+            baseline = ca_bond_traj[:,i].mean()**2
+            lags = 1 + np.arange(len(autocorr))
+            axs[5,1].plot(lags, (autocorr - baseline) / (ca_bond_traj[:,i].var()), color=colors[i%len(colors)])
+            out['our_decorrelation'][bond_feat] = (autocorr.astype(np.float16) - baseline) / (ca_bond_traj[:,i].var())
+        
+        axs[5,1].set_title('CA Bond Length Decorrelation (Generated)')
+        axs[5,1].set_xscale('log')
+        
+        # Bond angle decorrelations (MD reference)
+        for i, angle_feat in enumerate(ca_angle_feats):
+            nlag = 100000 if not args.truncate_ref else args.truncate_ref // args.stride_ref - 2
+            # For angles, use sin/cos transformation like other angular features
+            autocorr = acovf(np.sin(ca_angle_ref[:,i]), demean=False, adjusted=True, nlag=nlag) + acovf(np.cos(ca_angle_ref[:,i]), demean=False, adjusted=True, nlag=nlag)
+            baseline = np.sin(ca_angle_ref[:,i]).mean()**2 + np.cos(ca_angle_ref[:,i]).mean()**2
+            lags = 1 + np.arange(len(autocorr))
+            axs[4,2].plot(lags, (autocorr - baseline) / (1-baseline), color=colors[i%len(colors)])
+            out['md_decorrelation'][angle_feat] = (autocorr.astype(np.float16) - baseline) / (1-baseline)
+        
+        axs[4,2].set_title('CA Bond Angle Decorrelation (MD)')
+        axs[4,2].set_xscale('log')
+        
+        # Bond angle decorrelations (generated trajectories)
+        for i, angle_feat in enumerate(ca_angle_feats):
+            autocorr = acovf(np.sin(ca_angle_traj[:,i]), demean=False, adjusted=True, nlag=1 if args.ito else 1000) + acovf(np.cos(ca_angle_traj[:,i]), demean=False, adjusted=True, nlag=1 if args.ito else 1000)
+            baseline = np.sin(ca_angle_traj[:,i]).mean()**2 + np.cos(ca_angle_traj[:,i]).mean()**2
+            lags = 1 + np.arange(len(autocorr))
+            axs[5,2].plot(lags, (autocorr - baseline) / (1-baseline), color=colors[i%len(colors)])
+            out['our_decorrelation'][angle_feat] = (autocorr.astype(np.float16) - baseline) / (1-baseline)
+        
+        axs[5,2].set_title('CA Bond Angle Decorrelation (Generated)')
+        axs[5,2].set_xscale('log')
 
     if not args.c_alpha_only:
         ####### TICA #############

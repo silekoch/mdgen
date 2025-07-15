@@ -136,6 +136,43 @@ def get_featurized_ca_traj(name, cossin=True):
     
     return feature_labels, traj_features
 
+def get_featurized_ca_bonds_traj(name):
+    """
+    Load a trajectory and compute CA pseudo bond lengths between consecutive CA atoms.
+    """
+    traj = mdtraj.load(name + '.xtc', top=name + '.pdb')
+    ca_indices = traj.topology.select('name CA')
+
+    # Create pairs of consecutive CA atoms for bond length calculation
+    bond_indices = np.array([[ca_indices[i], ca_indices[i+1]] for i in range(len(ca_indices) - 1)])
+    bond_lengths = mdtraj.compute_distances(traj, bond_indices)
+    bond_identifiers = [f'CA_BOND_{i}_{i+1}' for i in range(bond_lengths.shape[1])]
+    
+    traj_features = bond_lengths
+    feature_labels = bond_identifiers
+    
+    return feature_labels, traj_features
+
+def get_featurized_ca_angles_traj(name, cossin=True):
+    """
+    Load a trajectory and compute CA pseudo bond angles (angles between consecutive CA-CA-CA triplets).
+    """
+    traj = mdtraj.load(name + '.xtc', top=name + '.pdb')
+    ca_indices = traj.topology.select('name CA')
+
+    # Create triplets of consecutive CA atoms for angle calculation
+    angle_indices = np.array([[ca_indices[i], ca_indices[i+1], ca_indices[i+2]] for i in range(len(ca_indices) - 2)])
+    bond_angles = mdtraj.compute_angles(traj, angle_indices)
+    angle_identifiers = [f'CA_ANGLE_{i}_{i+1}_{i+2}' for i in range(bond_angles.shape[1])]
+    
+    traj_features = bond_angles
+    feature_labels = angle_identifiers
+
+    if cossin:
+        feature_labels, traj_features = convert_featurized_traj_to_cossin(feature_labels, traj_features)
+    
+    return feature_labels, traj_features
+
 def get_tica(traj, lag=1000):
     tica = deeptime.decomposition.TICA(lagtime=lag, scaling='kinetic_map', var_cutoff=0.95)
     tica.fit(traj)
