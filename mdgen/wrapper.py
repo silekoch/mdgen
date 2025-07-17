@@ -486,6 +486,10 @@ class NewMDGenWrapper(Wrapper):
             cond_mask[:, ::self.args.cond_interval] = 1
         if self.args.inpainting or self.args.dynamic_mpnn or self.args.mpnn:
             cond_mask[:, :, COND_IDX] = 1
+        if self.args.local_env:
+            raise NotImplementedError()
+            ca_cond_mask = torch.zeros_like(latents)
+            ca_cond_mask[:, :, :, 0:7] = 1  # Or extend cond mask by one dim
 
         aatype_mask = torch.ones_like(batch['seqres'])
         if self.args.design:
