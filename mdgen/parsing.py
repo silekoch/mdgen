@@ -59,6 +59,8 @@ def parse_train_args():
     group.add_argument('--copy_frames', action='store_true')
     group.add_argument('--no_pad', action='store_true')
     group.add_argument('--short_md', action='store_true')
+    group.add_argument('--local_env', action='store_true')
+    group.add_argument('--local_env_cutoff', type=float, default=10.)
 
     ### Masking settings
     group = parser.add_argument_group("Masking settings")

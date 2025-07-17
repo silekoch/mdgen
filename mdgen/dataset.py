@@ -47,7 +47,7 @@ class MDGenDataset(torch.utils.data.Dataset):
             full_name = f"{name}_R{i}"
         else:
             full_name = name
-        arr = np.lib.format.open_memmap(f'{self.args.data_dir}/{full_name}{self.args.suffix}.npy', 'r')
+        arr = np.lib.format.open_memmap(f'{self.args.data_dir}/{full_name}{self.args.suffix}.npy', 'r')  # (T, L, 14, 3), in angstrom
         if self.args.frame_interval:
             arr = arr[::self.args.frame_interval]
         
@@ -55,10 +55,39 @@ class MDGenDataset(torch.utils.data.Dataset):
         if self.args.overfit_frame:
             frame_start = 0
         end = frame_start + self.args.num_frames
-        # arr = np.copy(arr[frame_start:end]) * 10 # convert to angstroms
-        arr = np.copy(arr[frame_start:end]).astype(np.float32) # / 10.0 # convert to nm
+        arr = np.copy(arr[frame_start:end]).astype(np.float32)
         if self.args.copy_frames:
             arr[1:] = arr[0]
+        
+        if self.args.local_env:
+            cutoff = self.args.local_env_cutoff
+            env_crop = self.args.local_env_crop
+            env_idx = np.random.choice(np.arange(len(seqres)))
+            if self.args.overfit_env:
+                env_idx = 0
+
+            ca_coordinates = atom14_to_ca(torch.from_numpy(arr))  # (T, L, 3)
+            distances = torch.linalg.vector_norm(ca_coordinates[env_idx] - ca_coordinates, dim=-1)  # (T, L)
+
+            cutoff_mask = torch.le(distances, cutoff)  # (T, L)
+            traj_cutoff_mask = torch.any(cutoff_mask, dim=0)  # (L)
+
+            arr = arr[:,traj_cutoff_mask]
+            seqres = seqres[traj_cutoff_mask]
+
+            # Limiting number of residues by cropping. This heuristic 
+            # is reasonable here, because in small molecules for local
+            # model training there won't be far-in-chain residues. 
+            L = arr.shape[1]
+            if L > env_crop:
+                # Cropping early to avoid cropping many tensors later. 
+                start = np.random.randint(0, L - env_crop + 1)
+                arr = arr[:,start:start+env_crop]
+                seqres = seqres[start:start+env_crop]
+            elif L < env_crop:
+                # Not yet padding here, to avoid handling padding in 
+                # the construction of the following arrays. 
+                ...
 
         # arr should be in ANGSTROMS
         if self.args.c_alpha_only:
@@ -97,6 +126,21 @@ class MDGenDataset(torch.utils.data.Dataset):
         torsions, torsion_mask = atom37_to_torsions(atom37, aatype)
         
         torsion_mask = torsion_mask[0]
+
+        T = arr.shape[0]
+        if self.args.local_env:
+            assert L <= env_crop, f"L ({L}) is greater than env_crop ({env_crop}) in {full_name}. This should have been cropped above."
+            if L < env_crop:
+                # Now that all the arrays are constructed, we can savely pad. 
+                pad = env_crop - L
+                frames = Rigid.cat([
+                    frames, 
+                    Rigid.identity((T, pad), requires_grad=False, fmt='rot_mat')
+                ], 1)
+                mask = np.concatenate([mask, np.zeros(pad, dtype=np.float32)])
+                seqres = np.concatenate([seqres, np.zeros(pad, dtype=int)])
+                torsions = torch.cat([torsions, torch.zeros((torsions.shape[0], pad, 7, 2), dtype=torch.float32)], 1)
+                torsion_mask = torch.cat([torsion_mask, torch.zeros((pad, 7), dtype=torch.float32)])
         
         if self.args.atlas:
             if L > self.args.crop:
