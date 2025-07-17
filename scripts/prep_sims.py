@@ -65,7 +65,7 @@ def traj_to_atom14(traj):
             if at.name not in rc.restype_name_to_atom14_names[resi.name]:
                 print(resi.name, at.name, 'not found'); continue
             j = rc.restype_name_to_atom14_names[resi.name].index(at.name)
-            arr[:,i,j] = traj.xyz[:,at.index] * 10.0
+            arr[:,i,j] = traj.xyz[:,at.index] * 10.0  # Convert to angstrom
     return arr
 
 if args.atlas:
