@@ -16,6 +16,8 @@ def parse_train_args():
     group.add_argument("--overfit", action='store_true')
     group.add_argument("--overfit_peptide", type=str, default=None)
     group.add_argument("--overfit_frame", action='store_true')
+    group.add_argument("--overfit_local_env", action='store_true')
+    group.add_argument("--overfit_crop", action='store_true')
     group.add_argument("--train_batches", type=int, default=None)
     group.add_argument("--val_batches", type=int, default=None)
     group.add_argument("--val_repeat", type=int, default=1)
@@ -59,8 +61,8 @@ def parse_train_args():
     group.add_argument('--copy_frames', action='store_true')
     group.add_argument('--no_pad', action='store_true')
     group.add_argument('--short_md', action='store_true')
-    group.add_argument('--local_env', action='store_true')
-    group.add_argument('--local_env_cutoff', type=float, default=10.)
+    group.add_argument('--sample_radius', type=float, default=None)
+    group.add_argument('--center_crop', action='store_true')
 
     ### Masking settings
     group = parser.add_argument_group("Masking settings")

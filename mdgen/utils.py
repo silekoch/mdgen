@@ -54,6 +54,49 @@ def compute_distance_matrix(coords):
     
     return distances
 
+def compute_crop_start(
+    sequence_length: int,
+    crop_length: int,
+    anchor_index: int,
+    center: bool = False,
+    random_bias: bool = True,
+) -> int:
+    """
+    Compute the start index for cropping a sequence.
+    
+    Args:
+        sequence_length: Total length of the original sequence
+        crop_length: Desired length of the crop
+        anchor_index: Index that must be included in the crop
+        center: If True, center the anchor in the crop. If False, random position.
+        random_bias: If crop_length is even and center is True randomly 
+            choose one of the two valid start positions. 
+        
+    Returns:
+        Start index for the crop
+    """
+    assert crop_length > 0 and sequence_length > 0 and anchor_index >= 0
+    assert crop_length < sequence_length
+    assert anchor_index < sequence_length
+
+    # Calculate valid range for start index
+    min_start = max(0, anchor_index - crop_length + 1)
+    max_start = min(sequence_length - crop_length, anchor_index)
+    
+    if center:
+        # Center the anchor in the crop
+        ideal_start = anchor_index - crop_length // 2
+        
+        # Handle even crop length with random left/right bias
+        if random_bias and crop_length % 2 == 0 and np.random.random() < 0.5:
+            ideal_start += 1
+        
+        # Clamp to valid range
+        return max(min_start, min(max_start, ideal_start))
+    else:
+        # Random position within valid range
+        return np.random.randint(min_start, max_start + 1)
+
 class DirichletConditionalFlow:
     def __init__(self, K=20, alpha_min=1, alpha_max=100, alpha_spacing=0.01):
         self.alphas = np.arange(alpha_min, alpha_max + alpha_spacing, alpha_spacing)
