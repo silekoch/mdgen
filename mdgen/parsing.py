@@ -72,6 +72,7 @@ def parse_train_args():
     group.add_argument("--supervise_all_torsions", action='store_true')
     group.add_argument("--supervise_no_rotations", action='store_true')
     group.add_argument("--c_alpha_only", action='store_true')
+    group.add_argument("--ca_cond", action='store_true')
 
     ## Ablations settings
     group = parser.add_argument_group("Ablations settings")

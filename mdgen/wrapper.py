@@ -477,7 +477,8 @@ class NewMDGenWrapper(Wrapper):
             loss_mask[..., rotation_indices] = 0.0
 
         ########
-        cond_mask = torch.zeros(B, T, L, dtype=int, device=offsets.device)
+        B, T, L, latent_dim = latents.shape
+        cond_mask = torch.zeros(B, T, L, latent_dim, dtype=int, device=offsets.device)
         if self.args.sim_condition:
             cond_mask[:, 0] = 1
         if self.args.tps_condition:
@@ -486,10 +487,12 @@ class NewMDGenWrapper(Wrapper):
             cond_mask[:, ::self.args.cond_interval] = 1
         if self.args.inpainting or self.args.dynamic_mpnn or self.args.mpnn:
             cond_mask[:, :, COND_IDX] = 1
-        if self.args.local_env:
-            raise NotImplementedError()
-            ca_cond_mask = torch.zeros_like(latents)
-            ca_cond_mask[:, :, :, 0:7] = 1  # Or extend cond mask by one dim
+        if self.args.ca_cond:
+            if self.args.no_frames: 
+                raise NotImplementedError()
+            if self.args.c_alpha_only:
+                raise ValueError()
+            cond_mask[:, :, :, 0:7] = 1  # Condition on oriented C-alpha
 
         aatype_mask = torch.ones_like(batch['seqres'])
         if self.args.design:
@@ -505,8 +508,8 @@ class NewMDGenWrapper(Wrapper):
                 'end_frames': rigids[:, -1],
                 'mask': batch['mask'].unsqueeze(1).expand(-1, T, -1),
                 'aatype': torch.where(aatype_mask.bool(), batch['seqres'], 20),
-                'x_cond': torch.where(cond_mask.unsqueeze(-1).bool(), latents, 0.0),
-                'x_cond_mask': cond_mask,
+                'x_cond': torch.where(cond_mask.bool(), latents, 0.0),
+                'x_cond_mask': torch.all(cond_mask, dim=-1).int(),  # We are folding the mask back in, as the conditioning across latent_dim has only two options, 1) all or 2) only CA. This we can represent as a single boolean for each L and the embedding should be able to capture the meaning.
             }
         }
 
