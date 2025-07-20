@@ -179,9 +179,13 @@ class MultiheadAttention(nn.Module):
                 padding elements are indicated by 1s.
             need_weights (bool, optional): return the attention weights,
                 averaged over heads (default: False).
-            attn_mask (ByteTensor, optional): typically used to
-                implement causal attention, where the mask prevents the
-                attention from looking forward in time (default: None).
+            attn_mask (FloatTensor, optional): added to the attention weights, 
+                i.e. use `-inf` for forbidden interactions and 0 for allowed. 
+                typically used to implement causal attention, where the mask
+                prevents the attention from looking forward in time 
+                (default: None).
+                3D with dimensions (B, L, L), where in the case of time-space
+                separation B = B * T of the original trajectory
             before_softmax (bool, optional): return the raw attention
                 weights and values before the attention softmax.
             need_head_weights (bool, optional): return the attention
@@ -268,7 +272,7 @@ class MultiheadAttention(nn.Module):
             v = torch.cat([v, self.bias_v.repeat(1, bsz, 1)])
             if attn_mask is not None:
                 attn_mask = torch.cat(
-                    [attn_mask, attn_mask.new_zeros(attn_mask.size(0), 1)], dim=1
+                    [attn_mask, attn_mask.new_zeros(attn_mask.size(0), attn_mask.size(1), 1)], dim=2
                 )
             if key_padding_mask is not None:
                 key_padding_mask = torch.cat(
@@ -342,7 +346,7 @@ class MultiheadAttention(nn.Module):
             v = torch.cat([v, v.new_zeros((v.size(0), 1) + v.size()[2:])], dim=1)
             if attn_mask is not None:
                 attn_mask = torch.cat(
-                    [attn_mask, attn_mask.new_zeros(attn_mask.size(0), 1)], dim=1
+                    [attn_mask, attn_mask.new_zeros(attn_mask.size(0), attn_mask.size(1), 1)], dim=2
                 )
             if key_padding_mask is not None:
                 key_padding_mask = torch.cat(
@@ -357,15 +361,12 @@ class MultiheadAttention(nn.Module):
             q, k = self.rot_emb(q, k)
 
         attn_weights = torch.bmm(q, k.transpose(1, 2))
-        attn_weights = MultiheadAttention.apply_sparse_mask(attn_weights, tgt_len, src_len, bsz)
 
         assert list(attn_weights.size()) == [bsz * self.num_heads, tgt_len, src_len]
 
         if attn_mask is not None:
-            attn_mask = attn_mask.unsqueeze(0)
-            if self.onnx_trace:
-                attn_mask = attn_mask.repeat(attn_weights.size(0), 1, 1)
-            attn_weights += attn_mask
+            attn_mask = torch.repeat_interleave(attn_mask, self.num_heads, dim=0)
+            attn_weights += attn_mask  # (bsz*num_heads, L, L)
 
         if key_padding_mask is not None:
             # don't attend to padding symbols
@@ -476,9 +477,6 @@ class MultiheadAttention(nn.Module):
         buffer: Dict[str, Optional[Tensor]],
     ):
         return self.set_incremental_state(incremental_state, "attn_state", buffer)
-
-    def apply_sparse_mask(attn_weights, tgt_len: int, src_len: int, bsz: int):
-        return attn_weights
 
     def upgrade_state_dict_named(self, state_dict, name):
         prefix = name + "." if name != "" else ""

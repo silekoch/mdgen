@@ -31,6 +31,29 @@ def simplex_proj(seq):
     X = torch.max(Y - selected_Xtmp, torch.zeros_like(Y))
     return X.view(seq.shape)
 
+def compute_distance_matrix(coords):
+    """
+    Compute pairwise distance matrix for coordinates with arbitrary leading dimensions.
+    
+    Args:
+        coords: tensor of shape (..., L, 3) where ... represents any number of leading dimensions
+    
+    Returns:
+        distance_matrix: tensor of shape (..., L, L)
+    """
+    # Get the shape - last two dimensions are (L, 3)
+    *_, L, _ = coords.shape
+    
+    # Expand dimensions for broadcasting
+    coords_i = coords.unsqueeze(-2)  # (..., L, 1, 3)
+    coords_j = coords.unsqueeze(-3)  # (..., 1, L, 3)
+    
+    # Compute squared differences and distances
+    diff = coords_i - coords_j  # (..., L, L, 3)
+    distances = torch.linalg.vector_norm(diff, dim=-1)  # (..., L, L)
+    
+    return distances
+
 class DirichletConditionalFlow:
     def __init__(self, K=20, alpha_min=1, alpha_max=100, alpha_spacing=0.01):
         self.alphas = np.arange(alpha_min, alpha_max + alpha_spacing, alpha_spacing)

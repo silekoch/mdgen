@@ -59,9 +59,7 @@ class MDGenDataset(torch.utils.data.Dataset):
         if self.args.copy_frames:
             arr[1:] = arr[0]
         
-        if self.args.local_env:
-            cutoff = self.args.local_env_cutoff
-            env_crop = self.args.local_env_crop
+        ca_coordinates = atom14_to_ca(torch.from_numpy(arr))  # (T, L, 3)
             env_idx = np.random.choice(np.arange(len(seqres)))
             if self.args.overfit_env:
                 env_idx = 0
@@ -163,24 +161,28 @@ class MDGenDataset(torch.utils.data.Dataset):
                 torsions = torch.cat([torsions, torch.zeros((torsions.shape[0], pad, 7, 2), dtype=torch.float32)], 1)
                 torsion_mask = torch.cat([torsion_mask, torch.zeros((pad, 7), dtype=torch.float32)])
 
-        if self.args.c_alpha_only:
-            return {
+        item = {
                 'name': full_name,
                 'frame_start': frame_start,
-                'ca_coordinates': ca_coordinates,
-                'key_frame_rots': key_frames._rots._rot_mats,
-                'key_frame_trans': key_frames._trans,
                 'seqres': seqres,
                 'mask': mask, # (L,)
+        }
+        if self.args.c_alpha_only or self.args.attn_mask_radius:
+            item |= {
+                'ca_coordinates': ca_coordinates,
             }
-        return {
-            'name': full_name,
-            'frame_start': frame_start,
+        if self.args.c_alpha_only: 
+            item |= {
+                'key_frame_rots': key_frames._rots._rot_mats,
+                'key_frame_trans': key_frames._trans,
+            }
+        else:
+            item |= {
+                'rots': frames._rots._rot_mats,
+                'trans': frames._trans,
             'torsions': torsions,
             'torsion_mask': torsion_mask,
-            'trans': frames._trans,
-            'rots': frames._rots._rot_mats,
-            'seqres': seqres,
-            'mask': mask, # (L,)
         }
+        
+        return item
 

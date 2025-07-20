@@ -98,8 +98,11 @@ class InvariantPointAttention(nn.Module):
                 [*, N_res, N_res, C_z] pair representation
             r:
                 [*, N_res] transformation object
-            mask:
-                [*, N_res] mask
+            frame_mask:
+                [*, N_res] mask specifying which residues are padding
+            attn_mask:
+                [*, N_res, N_res] mask specifying which residues are allowed 
+                to interact
         Returns:
             [*, N_res, C_s] single representation update
         """
@@ -198,7 +201,7 @@ class InvariantPointAttention(nn.Module):
             a = a + square_mask.unsqueeze(-3)
         if attn_mask is not None:
             attn_mask = self.inf * (attn_mask - 1)
-            a = a + attn_mask
+            a = a + attn_mask.unsqueeze(-3)
 
         a = self.softmax(a)
         a = F.dropout(a, p=self.dropout, training=self.training)

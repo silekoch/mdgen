@@ -14,7 +14,7 @@ from functools import partial
 
 from .model.latent_model import LatentMDGenModel
 from .transport.transport import create_transport, Sampler
-from .utils import get_offsets, atom14_to_pdb
+from .utils import compute_distance_matrix, get_offsets, atom14_to_pdb
 from .tensor_utils import tensor_tree_map
 from .geometry import frames_torsions_to_atom14, atom37_to_atom14
 
@@ -479,6 +479,7 @@ class NewMDGenWrapper(Wrapper):
         ########
         B, T, L, latent_dim = latents.shape
         cond_mask = torch.zeros(B, T, L, latent_dim, dtype=int, device=offsets.device)
+        attn_mask = None
         if self.args.sim_condition:
             cond_mask[:, 0] = 1
         if self.args.tps_condition:
@@ -493,6 +494,10 @@ class NewMDGenWrapper(Wrapper):
             if self.args.c_alpha_only:
                 raise ValueError()
             cond_mask[:, :, :, 0:7] = 1  # Condition on oriented C-alpha
+        if self.args.attn_mask_radius:
+            ca_coordinates = batch['ca_coordinates']  # (B, T, L, 3)
+            distances = compute_distance_matrix(ca_coordinates)  # (B, T, L, L)
+            attn_mask = torch.where(torch.le(distances, self.args.attn_mask_radius), 0., float("-inf"))  # (B, T, L, L)
 
         aatype_mask = torch.ones_like(batch['seqres'])
         if self.args.design:
@@ -510,6 +515,7 @@ class NewMDGenWrapper(Wrapper):
                 'aatype': torch.where(aatype_mask.bool(), batch['seqres'], 20),
                 'x_cond': torch.where(cond_mask.bool(), latents, 0.0),
                 'x_cond_mask': torch.all(cond_mask, dim=-1).int(),  # We are folding the mask back in, as the conditioning across latent_dim has only two options, 1) all or 2) only CA. This we can represent as a single boolean for each L and the embedding should be able to capture the meaning.
+                'attn_mask': attn_mask,
             }
         }
 
