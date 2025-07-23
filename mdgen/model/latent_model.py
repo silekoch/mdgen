@@ -59,6 +59,7 @@ class LatentMDGenModel(nn.Module):
         if self.args.design: cond_dim -= 20
         self.cond_to_emb = nn.Linear(cond_dim, args.embed_dim)
         self.mask_to_emb = nn.Embedding(2, args.embed_dim)
+        self.ca_cond_to_emb = nn.Linear(3, args.embed_dim)
         if self.args.design:
             self.x_d_to_emb = nn.Linear(20, args.embed_dim)
 
@@ -82,6 +83,21 @@ class LatentMDGenModel(nn.Module):
             if not self.args.no_aa_emb:
                 self.aatype_to_emb = nn.Embedding(21, args.embed_dim)
             self.ipa_layers = nn.ModuleList(
+                [
+                    IPALayer(
+                        embed_dim=args.embed_dim,
+                        ffn_embed_dim=4 * args.embed_dim,
+                        mha_heads=args.mha_heads,
+                        dropout=args.dropout,
+                        use_rotary_embeddings=not args.no_rope,
+                        ipa_args=ipa_args if not args.overwrite_ipa_with_linear else None,
+                    )
+                    for _ in range(args.num_layers)
+                ]
+            )
+
+        if args.ca_cond:
+            self.ca_cond_layers = nn.ModuleList(
                 [
                     IPALayer(
                         embed_dim=args.embed_dim,
@@ -170,6 +186,11 @@ class LatentMDGenModel(nn.Module):
             for block in self.ipa_layers:
                 nn.init.constant_(block.ipa.linear_out.weight, 0)
                 nn.init.constant_(block.ipa.linear_out.bias, 0)
+        
+        if self.args.ca_cond:
+            for block in self.ca_cond_layers:
+                nn.init.constant_(block.ipa.linear_out.weight, 0)
+                nn.init.constant_(block.ipa.linear_out.bias, 0)
 
         if self.args.interleave_ipa:
             for block in self.layers:
@@ -212,6 +233,23 @@ class LatentMDGenModel(nn.Module):
             return x
         else:
             raise NotImplementedError("ONly forward mode implemented for run_aatype_to_emb")
+
+    def run_ca_rigid_cond(
+            self,
+            t,
+            mask,
+            start_frames,
+            aatype,
+            attn_mask=None,
+    ):
+        if self.args.sim_condition:
+            B, L = mask.shape
+            x = torch.zeros(B, L, self.args.embed_dim, device=mask.device)
+            if aatype is not None and not self.args.no_aa_emb:
+                x = x + self.aatype_to_emb(aatype)
+            for layer in self.ca_cond_layers:
+                x = layer(x, t, mask, frames=start_frames, attn_mask=attn_mask)
+        return x
 
     def run_ipa(
             self,
@@ -304,7 +342,8 @@ class LatentMDGenModel(nn.Module):
     def forward(self, x, t, mask,
                 start_frames=None, end_frames=None,
                 x_cond=None, x_cond_mask=None,
-                aatype=None, attn_mask=None
+                aatype=None, attn_mask=None, 
+                ca_cond=None, ca_initial_rigids=None,
                 ):
         if self.args.dynamic_mpnn:
             x = x[:, [0, -1]]
@@ -331,6 +370,9 @@ class LatentMDGenModel(nn.Module):
 
         if x_cond is not None:
             x = x + self.cond_to_emb(x_cond) + self.mask_to_emb(x_cond_mask)  # token has cond g, tau
+        
+        if ca_cond is not None:
+            x = x + self.ca_cond_to_emb(ca_cond)
 
         t = self.t_embedder(t * self.args.time_multiplier)[:, None]
 
@@ -344,6 +386,15 @@ class LatentMDGenModel(nn.Module):
                 start_frames,
                 end_frames, aatype,
                 x_d=x_d,
+                attn_mask=attn_mask[:, 0] if attn_mask is not None else None,
+            )[:, None]
+        
+        if self.args.ca_cond:
+            x = x + self.run_ca_rigid_cond(
+                t[:, 0],
+                mask[:, 0],
+                ca_initial_rigids,
+                aatype,
                 attn_mask=attn_mask[:, 0] if attn_mask is not None else None,
             )[:, None]
 
@@ -368,10 +419,13 @@ class LatentMDGenModel(nn.Module):
     def forward_inference(self, x, t, mask,
                           start_frames=None, end_frames=None,
                           x_cond=None, x_cond_mask=None,
-                          aatype=None, attn_mask=None,
+                          aatype=None, attn_mask=None, 
+                          ca_cond=None, ca_initial_rigids=None,
                           ):
         if not self.args.design or self.args.dynamic_mpnn or self.args.mpnn:
-            return self.forward(x, t, mask, start_frames, end_frames, x_cond, x_cond_mask, aatype)
+            return self.forward(x, t, mask, start_frames, end_frames, x_cond, 
+                                x_cond_mask, aatype, attn_mask, ca_cond, 
+                                ca_initial_rigids)
         else:
             x_discrete = x[:, :, :, -20:]
             B, T, L, _ = x_discrete.shape

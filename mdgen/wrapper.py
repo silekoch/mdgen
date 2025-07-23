@@ -412,6 +412,11 @@ class NewMDGenWrapper(Wrapper):
 
         if self.args.c_alpha_only:
             return self.prep_batch_c_alpha_only(batch)
+        
+        if self.args.ca_cond:
+            ca_only_batch = self.prep_batch_c_alpha_only(batch)
+            ca_initial_rigids = ca_only_batch['initial_rigids']  # If I use the normal rigids for ca coordinate computation I could maybe get away with only one IPA block
+            ca_cond = ca_only_batch['latents']  # CA in initial_rigids
 
         # if self.args.hyena:
         if 'latents' in batch:
@@ -488,12 +493,7 @@ class NewMDGenWrapper(Wrapper):
             cond_mask[:, ::self.args.cond_interval] = 1
         if self.args.inpainting or self.args.dynamic_mpnn or self.args.mpnn:
             cond_mask[:, :, COND_IDX] = 1
-        if self.args.ca_cond:
-            if self.args.no_frames: 
-                raise NotImplementedError()
-            if self.args.c_alpha_only:
-                raise ValueError()
-            cond_mask[:, :, :, 0:7] = 1  # Condition on oriented C-alpha
+
         if self.args.attn_mask_radius:
             ca_coordinates = batch['ca_coordinates']  # (B, T, L, 3)
             distances = compute_distance_matrix(ca_coordinates)  # (B, T, L, L)
@@ -514,7 +514,9 @@ class NewMDGenWrapper(Wrapper):
                 'mask': batch['mask'].unsqueeze(1).expand(-1, T, -1),
                 'aatype': torch.where(aatype_mask.bool(), batch['seqres'], 20),
                 'x_cond': torch.where(cond_mask.bool(), latents, 0.0),
-                'x_cond_mask': torch.all(cond_mask, dim=-1).int(),  # We are folding the mask back in, as the conditioning across latent_dim has only two options, 1) all or 2) only CA. This we can represent as a single boolean for each L and the embedding should be able to capture the meaning.
+                'x_cond_mask': torch.all(cond_mask, dim=-1).int(),
+                'ca_initial_rigids': ca_initial_rigids if self.args.ca_cond else None,
+                'ca_cond': ca_cond if self.args.ca_cond else None,
                 'attn_mask': attn_mask,
             }
         }

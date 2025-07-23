@@ -85,14 +85,8 @@ class MDGenDataset(torch.utils.data.Dataset):
             seqres = seqres[traj_cutoff_mask]
 
         # arr should be in ANGSTROMS
-        if self.args.c_alpha_only:
-            if self.args.sim_condition:
-                key_frames = ca_to_frames(ca_coordinates[0:1])
-            else:
-                NotImplementedError("C-alpha-only mode only implemented for " \
-                "sim condition")
-        else:
-            frames = atom14_to_frames(torch.from_numpy(arr))
+        key_frames = ca_to_frames(ca_coordinates[0:1])
+        frames = atom14_to_frames(torch.from_numpy(arr))
         aatype = torch.from_numpy(seqres)[None].expand(self.args.num_frames, -1)
         atom37 = torch.from_numpy(atom14_to_atom37(arr, aatype)).float()
         
@@ -129,32 +123,26 @@ class MDGenDataset(torch.utils.data.Dataset):
                 start = np.random.randint(0, L - self.args.crop + 1) if not self.args.overfit_crop else 0
             seqres = seqres[start:start+self.args.crop]
             mask = mask[start:start+self.args.crop]
-            if self.args.c_alpha_only or self.args.attn_mask_radius:
-                ca_coordinates = ca_coordinates[:,start:start+self.args.crop]
-            if self.args.c_alpha_only:
-                key_frames = key_frames[:,start:start+self.args.crop]
-            else:
-                frames = frames[:,start:start+self.args.crop]
-                torsions = torsions[:,start:start+self.args.crop]
-                torsion_mask = torsion_mask[start:start+self.args.crop]
+            ca_coordinates = ca_coordinates[:,start:start+self.args.crop]
+            key_frames = key_frames[:,start:start+self.args.crop]
+            frames = frames[:,start:start+self.args.crop]
+            torsions = torsions[:,start:start+self.args.crop]
+            torsion_mask = torsion_mask[start:start+self.args.crop]
         elif L < self.args.crop:
             pad = self.args.crop - L
             seqres = np.concatenate([seqres, np.zeros(pad, dtype=int)])
             mask = np.concatenate([mask, np.zeros(pad, dtype=np.float32)])
-            if self.args.c_alpha_only or self.args.attn_mask_radius:
-                ca_coordinates = torch.cat([ca_coordinates, torch.zeros((ca_coordinates.shape[0], pad, 3), dtype=torch.float32)], dim=1)
-            if self.args.c_alpha_only:
-                key_frames = Rigid.cat([
-                    key_frames, 
-                    Rigid.identity((key_frames.shape[0], pad), requires_grad=False, fmt='rot_mat')
-                ], dim=1)
-            else:
-                frames = Rigid.cat([
-                    frames, 
-                    Rigid.identity((self.args.num_frames, pad), requires_grad=False, fmt='rot_mat')
-                ], dim=1)
-                torsions = torch.cat([torsions, torch.zeros((torsions.shape[0], pad, 7, 2), dtype=torch.float32)], dim=1)
-                torsion_mask = torch.cat([torsion_mask, torch.zeros((pad, 7), dtype=torch.float32)])
+            ca_coordinates = torch.cat([ca_coordinates, torch.zeros((ca_coordinates.shape[0], pad, 3), dtype=torch.float32)], dim=1)
+            key_frames = Rigid.cat([
+                key_frames, 
+                Rigid.identity((key_frames.shape[0], pad), requires_grad=False, fmt='rot_mat')
+            ], dim=1)
+            frames = Rigid.cat([
+                frames, 
+                Rigid.identity((self.args.num_frames, pad), requires_grad=False, fmt='rot_mat')
+            ], dim=1)
+            torsions = torch.cat([torsions, torch.zeros((torsions.shape[0], pad, 7, 2), dtype=torch.float32)], dim=1)
+            torsion_mask = torch.cat([torsion_mask, torch.zeros((pad, 7), dtype=torch.float32)])
 
         item = {
                 'name': full_name,
@@ -162,16 +150,16 @@ class MDGenDataset(torch.utils.data.Dataset):
                 'seqres': seqres,
                 'mask': mask, # (L,)
         }
-        if self.args.c_alpha_only or self.args.attn_mask_radius:
+        if self.args.c_alpha_only or self.args.ca_cond or self.args.attn_mask_radius:
             item |= {
                 'ca_coordinates': ca_coordinates,
             }
-        if self.args.c_alpha_only: 
+        if self.args.c_alpha_only or self.args.ca_cond: 
             item |= {
                 'key_frame_rots': key_frames._rots._rot_mats,
                 'key_frame_trans': key_frames._trans,
             }
-        else:
+        if not self.args.c_alpha_only:
             item |= {
                 'rots': frames._rots._rot_mats,
                 'trans': frames._trans,
