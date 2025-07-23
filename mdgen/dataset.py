@@ -32,7 +32,7 @@ class MDGenDataset(torch.utils.data.Dataset):
             return 1000
         return self.repeat * len(self.df)
 
-    def __getitem__(self, idx):
+    def __getitem__(self, idx, env_idx=None):
         idx = idx % len(self.df)
         if self.args.overfit:
             idx = 0
@@ -65,7 +65,7 @@ class MDGenDataset(torch.utils.data.Dataset):
         ca_coordinates = atom14_to_ca(torch.from_numpy(arr))  # (T, L, 3)
         
         if self.args.sample_radius:
-            env_idx = np.random.choice(np.arange(len(seqres)))
+            env_idx = np.random.choice(np.arange(len(seqres))) if env_idx is None else env_idx
             if self.args.overfit_local_env:
                 env_idx = 0
 
