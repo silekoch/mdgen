@@ -45,7 +45,7 @@ class MDGenDataset(torch.utils.data.Dataset):
             seqres = name
 
         if self.args.atlas:
-            i = np.random.randint(1, 4)
+            i = np.random.randint(1, 4) if self.args.atlas_replica is None else self.args.atlas_replica
             full_name = f"{name}_R{i}"
         else:
             full_name = name

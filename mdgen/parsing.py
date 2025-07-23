@@ -58,6 +58,7 @@ def parse_train_args():
     group.add_argument('--crop', type=int, default=256)
     group.add_argument('--suffix', type=str, default='')
     group.add_argument('--atlas', action='store_true')
+    group.add_argument('--atlas_replica', type=int, default=None)
     group.add_argument('--copy_frames', action='store_true')
     group.add_argument('--no_pad', action='store_true')
     group.add_argument('--short_md', action='store_true')
