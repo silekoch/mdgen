@@ -31,6 +31,13 @@ class MDGenDataset(torch.utils.data.Dataset):
         if self.args.overfit_peptide:
             return 1000
         return self.repeat * len(self.df)
+    
+    def get_index(self, name):
+        return self.df.get_loc(name)
+    
+    def get_item_len(self, name):
+        seqres = self.df.seqres[name]
+        return len(seqres)
 
     def __getitem__(self, idx, env_idx=None):
         idx = idx % len(self.df)
