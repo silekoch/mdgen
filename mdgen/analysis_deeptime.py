@@ -6,6 +6,29 @@ import numpy as np
 import deeptime
 from tqdm import tqdm
 
+def get_trajectory_file(name, replica=1):
+    """
+    Get the appropriate trajectory filename based on naming convention.
+    
+    Args:
+        name: Base name for the trajectory
+        replica: Which replica to use for atlas data (1, 2, or 3)
+    
+    Returns:
+        String path to the trajectory file
+    """
+    # Try standard naming first
+    standard_file = name + '.xtc'
+    if os.path.exists(standard_file):
+        return standard_file
+    
+    # Try atlas naming convention
+    atlas_file = f"{name}_prod_R{replica}_fit.xtc"
+    if os.path.exists(atlas_file):
+        return atlas_file
+    
+    raise FileNotFoundError(f"No trajectory file found for {name} (tried {standard_file} and {atlas_file})")
+
 def get_backbone_angle_identifier(atom_indices, traj):
     """
     Generate an identifier for the angle based on the bond vector in it's rotation axis. 
@@ -56,7 +79,7 @@ def convert_featurized_traj_to_cossin(feature_labels, traj_features):
     return feature_labels, traj_features
 
 def get_featurized_traj(name, sidechains=False, cossin=True):
-    traj = mdtraj.load(name + '.xtc', top=name + '.pdb')
+    traj = mdtraj.load(get_trajectory_file(name), top=name + '.pdb')
     
     # Compute backbone torsions
     phi_indices, phi_angles = mdtraj.compute_phi(traj)
@@ -103,7 +126,7 @@ def get_featurized_omega_traj(name, cossin=True):
     """
     Load a trajectory and compute the omega angles, returning the features and their labels.
     """
-    traj = mdtraj.load(name + '.xtc', top=name + '.pdb')
+    traj = mdtraj.load(get_trajectory_file(name), top=name + '.pdb')
 
     # Compute omega angles
     omega_indices, omega_angles = mdtraj.compute_omega(traj)
@@ -121,7 +144,7 @@ def get_featurized_omega_traj(name, cossin=True):
     return feature_labels, traj_features
 
 def get_featurized_ca_traj(name, cossin=True):
-    traj = mdtraj.load(name + '.xtc', top=name + '.pdb')
+    traj = mdtraj.load(get_trajectory_file(name), top=name + '.pdb')
     ca_indices = traj.topology.select('name CA')
 
     dihedral_indices = np.array([ca_indices[i:i+4] for i in range(len(ca_indices) - 3)])
@@ -140,7 +163,7 @@ def get_featurized_ca_bonds_traj(name):
     """
     Load a trajectory and compute CA pseudo bond lengths between consecutive CA atoms.
     """
-    traj = mdtraj.load(name + '.xtc', top=name + '.pdb')
+    traj = mdtraj.load(get_trajectory_file(name), top=name + '.pdb')
     ca_indices = traj.topology.select('name CA')
 
     # Create pairs of consecutive CA atoms for bond length calculation
@@ -157,7 +180,7 @@ def get_featurized_ca_angles_traj(name, cossin=True):
     """
     Load a trajectory and compute CA pseudo bond angles (angles between consecutive CA-CA-CA triplets).
     """
-    traj = mdtraj.load(name + '.xtc', top=name + '.pdb')
+    traj = mdtraj.load(get_trajectory_file(name), top=name + '.pdb')
     ca_indices = traj.topology.select('name CA')
 
     # Create triplets of consecutive CA atoms for angle calculation
