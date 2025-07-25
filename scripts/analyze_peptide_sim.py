@@ -16,6 +16,7 @@ parser.add_argument('--msm_lag', type=int, default=10)
 parser.add_argument('--ito', action='store_true')
 parser.add_argument('--num_workers', type=int, default=1)
 parser.add_argument('--c_alpha_only', action='store_true')
+parser.add_argument('--max_plot_features', type=int, default=6)
 
 args = parser.parse_args()
 
@@ -31,6 +32,13 @@ import matplotlib.pyplot as plt
 from statsmodels.tsa.stattools import acovf, acf
 colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
 
+def sample_features_for_plot(ref_data, traj_data, max_features=None):
+    """Sample same random subset of features from both datasets for plotting"""
+    if ref_data.shape[1] <= max_features:
+        return ref_data, traj_data, None
+    indices = np.random.choice(ref_data.shape[1], max_features, replace=False)
+    return ref_data[:, indices], traj_data[:, indices], indices
+
 def main(name):
     out = {}
     np.random.seed(137)
@@ -43,8 +51,10 @@ def main(name):
         feats, ref = mdgen.analysis_deeptime.get_featurized_traj(f'{args.mddir}/{name}/{name}', sidechains=False, cossin=False)
         if args.truncate_ref: ref = ref[:args.truncate_ref:args.stride_ref]
         feats = [feat.split(' ', 2)[0] + ' ' + feat.split(' ', 2)[-1] for feat in feats]  # Cut out chain ID
-        mdgen.plots1d.plot_feature_histograms(ref, ax=axs[0,0], color=colors[0])
-        mdgen.plots1d.plot_feature_histograms(traj, feature_labels=feats, ax=axs[0,0], color=colors[1])
+        ref_plot, traj_plot, indices = sample_features_for_plot(ref, traj, args.max_plot_features)
+        plot_feats = [feats[i] for i in indices] if indices is not None else feats
+        mdgen.plots1d.plot_feature_histograms(ref_plot, ax=axs[0,0], color=colors[0])
+        mdgen.plots1d.plot_feature_histograms(traj_plot, feature_labels=plot_feats, ax=axs[0,0], color=colors[1])
         axs[0,0].set_title('BB torsions')
         axs[0,0].set_xlabel('Angle (rad)')
 
@@ -53,9 +63,11 @@ def main(name):
         if args.truncate: omega_traj = omega_traj[:args.truncate]
         omega_feats, omega_ref = mdgen.analysis_deeptime.get_featurized_omega_traj(f'{args.mddir}/{name}/{name}', cossin=False)
         if args.truncate_ref: omega_ref = omega_ref[:args.truncate_ref:args.stride_ref]
-        mdgen.plots1d.plot_feature_histograms(omega_ref, ax=axs[1,0], color=colors[0])
+        omega_ref_plot, omega_traj_plot, omega_indices = sample_features_for_plot(omega_ref, omega_traj, args.max_plot_features)
         omega_feats = [feat.split(' ', 2)[-1] for feat in omega_feats]  # Cut out angle name and chain ID
-        mdgen.plots1d.plot_feature_histograms(omega_traj, feature_labels=omega_feats, ax=axs[1,0], color=colors[1])
+        plot_omega_feats = [omega_feats[i] for i in omega_indices] if omega_indices is not None else omega_feats
+        mdgen.plots1d.plot_feature_histograms(omega_ref_plot, ax=axs[1,0], color=colors[0])
+        mdgen.plots1d.plot_feature_histograms(omega_traj_plot, feature_labels=plot_omega_feats, ax=axs[1,0], color=colors[1])
         axs[1,0].set_title('OMEGA torsions')
         axs[1,0].set_xlabel('Angle (rad)')
 
@@ -65,8 +77,9 @@ def main(name):
         if args.truncate: ca_torsion_traj = ca_torsion_traj[:args.truncate]
         ca_torsion_feats, ca_torsion_ref = mdgen.analysis_deeptime.get_featurized_ca_traj(f'{args.mddir}/{name}/{name}', cossin=False)
         if args.truncate_ref: ca_torsion_ref = ca_torsion_ref[:args.truncate_ref:args.stride_ref]
-        mdgen.plots1d.plot_feature_histograms(ca_torsion_ref, ax=axs[3,0], color=colors[0])
-        mdgen.plots1d.plot_feature_histograms(ca_torsion_traj, ax=axs[3,0], color=colors[1])
+        ca_torsion_ref_plot, ca_torsion_traj_plot, _ = sample_features_for_plot(ca_torsion_ref, ca_torsion_traj, args.max_plot_features)
+        mdgen.plots1d.plot_feature_histograms(ca_torsion_ref_plot, ax=axs[3,0], color=colors[0])
+        mdgen.plots1d.plot_feature_histograms(ca_torsion_traj_plot, ax=axs[3,0], color=colors[1])
         axs[3,0].set_title('CA dihedrals')
         axs[3,0].set_xlabel('Angle (rad)')
 
@@ -76,8 +89,9 @@ def main(name):
         _, ca_bond_ref = mdgen.analysis_deeptime.get_featurized_ca_bonds_traj(f'{args.mddir}/{name}/{name}')
         if args.truncate_ref: ca_bond_ref = ca_bond_ref[:args.truncate_ref:args.stride_ref]
         
-        mdgen.plots1d.plot_feature_histograms(ca_bond_ref, ax=axs[3,1], color=colors[0])
-        mdgen.plots1d.plot_feature_histograms(ca_bond_traj, ax=axs[3,1], color=colors[1])
+        ca_bond_ref_plot, ca_bond_traj_plot, _ = sample_features_for_plot(ca_bond_ref, ca_bond_traj, args.max_plot_features)
+        mdgen.plots1d.plot_feature_histograms(ca_bond_ref_plot, ax=axs[3,1], color=colors[0])
+        mdgen.plots1d.plot_feature_histograms(ca_bond_traj_plot, ax=axs[3,1], color=colors[1])
         axs[3,1].set_title('CA Bond Lengths')
         axs[3,1].set_xlabel('Distance (nm)')
         
@@ -87,8 +101,9 @@ def main(name):
         _, ca_angle_ref = mdgen.analysis_deeptime.get_featurized_ca_angles_traj(f'{args.mddir}/{name}/{name}', cossin=False)
         if args.truncate_ref: ca_angle_ref = ca_angle_ref[:args.truncate_ref:args.stride_ref]
         
-        mdgen.plots1d.plot_feature_histograms(ca_angle_ref, ax=axs[3,2], color=colors[0])
-        mdgen.plots1d.plot_feature_histograms(ca_angle_traj, ax=axs[3,2], color=colors[1])
+        ca_angle_ref_plot, ca_angle_traj_plot, _ = sample_features_for_plot(ca_angle_ref, ca_angle_traj, args.max_plot_features)
+        mdgen.plots1d.plot_feature_histograms(ca_angle_ref_plot, ax=axs[3,2], color=colors[0])
+        mdgen.plots1d.plot_feature_histograms(ca_angle_traj_plot, ax=axs[3,2], color=colors[1])
         axs[3,2].set_title('CA Bond Angles')
         axs[3,2].set_xlabel('Angle (rad)')
     
