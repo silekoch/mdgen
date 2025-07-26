@@ -32,6 +32,37 @@ import matplotlib.pyplot as plt
 from statsmodels.tsa.stattools import acovf, acf
 colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
 
+def plot_jsd_by_feature_type(jsd_dict, ax):
+    """Plot JSD values grouped by feature type"""
+    # Separate features by type
+    phi_features = {k: v for k, v in jsd_dict.items() if 'PHI' in k and '|' not in k}
+    psi_features = {k: v for k, v in jsd_dict.items() if 'PSI' in k and '|' not in k}
+    chi_features = {k: v for k, v in jsd_dict.items() if 'CHI' in k}
+    ca_features = {k: v for k, v in jsd_dict.items() if any(x in k for x in ['CA', 'Bond', 'Angle']) and 'TICA' not in k}
+    tica_features = {k: v for k, v in jsd_dict.items() if 'TICA' in k}
+    rama_features = {k: v for k, v in jsd_dict.items() if '|' in k}
+    
+    feature_types = []
+    mean_jsds = []
+    
+    for name, features in [('PHI', phi_features), ('PSI', psi_features), 
+                          ('CHI', chi_features), ('CA', ca_features), 
+                          ('TICA', tica_features), ('Rama', rama_features)]:
+        if features:
+            feature_types.append(name)
+            mean_jsds.append(np.mean(list(features.values())))
+    
+    if feature_types:
+        bars = ax.bar(feature_types, mean_jsds, color=colors[:len(feature_types)])
+        ax.set_ylabel('Mean Jensen-Shannon Divergence')
+        ax.set_title('JSD by Feature Type')
+        ax.tick_params(axis='x', rotation=45)
+        
+        # Add value labels on bars
+        for bar, value in zip(bars, mean_jsds):
+            ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.001,
+                   f'{value:.3f}', ha='center', va='bottom', fontsize=8)
+
 def sample_features_for_plot(ref_data, traj_data, max_features=None):
     """Sample same random subset of features from both datasets for plotting"""
     if ref_data.shape[1] <= max_features:
@@ -379,6 +410,8 @@ def main(name):
                 print('ERROR', e, name, flush=True)
     
     if args.plot:
+        # Add JSD summary plot
+        plot_jsd_by_feature_type(out['JSD'], axs[2,2])
         fig.savefig(f'{args.pdbdir}/{name}.pdf')
     
     return name, out
