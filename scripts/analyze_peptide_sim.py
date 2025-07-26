@@ -409,9 +409,28 @@ def main(name):
             except Exception as e:
                 print('ERROR', e, name, flush=True)
     
+    # Calculate backbone JSD as single performance metric
+    if args.c_alpha_only:
+        # For CA-only: use CA dihedral angles as primary metric
+        backbone_jsd = np.mean([v for k, v in out['JSD'].items() 
+                               if 'CA_DIHEDRAL' in k])
+        metric_name = "CA Dihedral JSD"
+    else:
+        # For all-atom: use PHI/PSI angles
+        backbone_jsd = np.mean([v for k, v in out['JSD'].items() 
+                               if any(x in k for x in ['PHI', 'PSI']) and '|' not in k])
+        metric_name = "Backbone JSD"
+    
+    out['backbone_jsd'] = backbone_jsd
+    print(f"{metric_name} for {name}: {backbone_jsd:.4f}")
+    
     if args.plot:
         # Add JSD summary plot
         plot_jsd_by_feature_type(out['JSD'], axs[2,2])
+        
+        # Add backbone JSD as text annotation
+        fig.suptitle(f'{name} - {metric_name}: {backbone_jsd:.4f}', fontsize=16, y=0.98)
+        
         fig.savefig(f'{args.pdbdir}/{name}.pdf')
     
     return name, out
