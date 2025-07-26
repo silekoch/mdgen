@@ -195,7 +195,7 @@ def main(name):
     for i, angle_feat in enumerate(ca_angle_feats):
         ref_p = np.histogram(ca_angle_ref[:,i], range=(0, np.pi), bins=100)[0]
         traj_p = np.histogram(ca_angle_traj[:,i], range=(0, np.pi), bins=100)[0]
-        out[angle_feat] = jensenshannon(ref_p, traj_p)
+        out['JSD'][angle_feat] = jensenshannon(ref_p, traj_p)
 
     ############ Torsion decorrelations
     out['md_decorrelation'] = {}
