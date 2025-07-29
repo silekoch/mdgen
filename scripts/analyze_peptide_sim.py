@@ -38,7 +38,9 @@ def plot_jsd_by_feature_type(jsd_dict, ax):
     phi_features = {k: v for k, v in jsd_dict.items() if 'PHI' in k and '|' not in k}
     psi_features = {k: v for k, v in jsd_dict.items() if 'PSI' in k and '|' not in k}
     chi_features = {k: v for k, v in jsd_dict.items() if 'CHI' in k}
-    ca_features = {k: v for k, v in jsd_dict.items() if any(x in k for x in ['CA', 'Bond', 'Angle']) and 'TICA' not in k}
+    ca_dihedral_features = {k: v for k, v in jsd_dict.items() if 'CA_DIHEDRAL' in k}
+    ca_bond_features = {k: v for k, v in jsd_dict.items() if 'CA_BOND' in k}
+    ca_angle_features = {k: v for k, v in jsd_dict.items() if 'CA_ANGLE' in k}
     tica_features = {k: v for k, v in jsd_dict.items() if 'TICA' in k}
     rama_features = {k: v for k, v in jsd_dict.items() if '|' in k}
     
@@ -46,7 +48,8 @@ def plot_jsd_by_feature_type(jsd_dict, ax):
     mean_jsds = []
     
     for name, features in [('PHI', phi_features), ('PSI', psi_features), 
-                          ('CHI', chi_features), ('CA', ca_features), 
+                          ('CHI', chi_features), ('CA Dih', ca_dihedral_features),
+                          ('CA Bond', ca_bond_features), ('CA Angle', ca_angle_features),
                           ('TICA', tica_features), ('Rama', rama_features)]:
         if features:
             feature_types.append(name)
@@ -426,7 +429,7 @@ def main(name):
     
     if args.plot:
         # Add JSD summary plot
-        plot_jsd_by_feature_type(out['JSD'], axs[2,2])
+        plot_jsd_by_feature_type(out['JSD'], axs[2,3])
         
         # Add backbone JSD as text annotation
         fig.suptitle(f'{name} - {metric_name}: {backbone_jsd:.4f}', fontsize=16, y=0.98)
