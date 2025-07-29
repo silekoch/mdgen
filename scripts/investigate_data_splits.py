@@ -47,3 +47,17 @@ with open(MODEL_DIR + '/test_set.txt', 'w') as f:
     f.write(f'Test set length: {len(testset_names)}\n')
     for name in testset_names:
         f.write(name + '\n')
+
+# Test-Train bigram overlap
+test_train_overlap = defaultdict(set)
+for test_name in testset_names:
+    test_name_bigrams = [test_name[i:i+2] for i in range(len(test_name) - 1)]
+    for train_name in trainset_names:
+        if any(duet in train_name for duet in test_name_bigrams):
+            test_train_overlap[test_name].add(train_name)
+
+# Save the test-train overlap to a text file
+with open(MODEL_DIR + '/test_train_bigram_overlap.txt', 'w') as f:
+    f.write(f'Test name - Train names with bigram overlap\n')
+    for test_name, train_names in test_train_overlap.items():
+        f.write(f'{test_name} - {sorted(list(train_names))}\n')
