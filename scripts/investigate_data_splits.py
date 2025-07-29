@@ -1,3 +1,4 @@
+import statistics
 from mdgen.parsing import parse_train_args
 args = parse_train_args()
 
@@ -61,3 +62,34 @@ with open(MODEL_DIR + '/test_train_bigram_overlap.txt', 'w') as f:
     f.write(f'Test name - Train names with bigram overlap\n')
     for test_name, train_names in test_train_overlap.items():
         f.write(f'{test_name} - {sorted(list(train_names))}\n')
+
+# ------------------------------------------------------------------
+# Quick report: how much bigram leakage do we have?
+# ------------------------------------------------------------------
+
+def describe_bigram_overlap(overlap_dict, total_names, tag):
+    """
+    overlap_dict : mapping {split_name → set(train_names_with_overlap)}
+                   (only names that hit ≥1 train bigram are present)
+    total_names  : full size of the split (val/test)
+    tag          : label for pretty printing
+    """
+    names_with_overlap = len(overlap_dict)
+    pct_with_overlap   = 100.0 * names_with_overlap / total_names
+
+    # how many train names each split name overlaps with
+    match_counts = [len(train_hits) for train_hits in overlap_dict.values()] or [0]
+
+    print(f'— {tag} bigram overlap —')
+    print(f'  names with ≥1 overlap : {names_with_overlap}/{total_names} '
+          f'({pct_with_overlap:.1f} %)')
+    print(f'  mean #matches / name  : {statistics.mean(match_counts):.2f}')
+    print(f'  median                : {statistics.median(match_counts)}')
+    print(f'  max                   : {max(match_counts)}\n')
+    print(f'  min                   : {min(match_counts)}\n')
+
+# ------------------------------------------------------------------
+# Call the helper for both splits
+# ------------------------------------------------------------------
+describe_bigram_overlap(overlap,            valset_len,      'Val‑Train')
+describe_bigram_overlap(test_train_overlap, len(testset_names), 'Test‑Train')
