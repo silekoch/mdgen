@@ -59,7 +59,8 @@ class LatentMDGenModel(nn.Module):
         if self.args.design: cond_dim -= 20
         self.cond_to_emb = nn.Linear(cond_dim, args.embed_dim)
         self.mask_to_emb = nn.Embedding(2, args.embed_dim)
-        self.ca_cond_to_emb = nn.Linear(3, args.embed_dim)
+        if self.args.ca_cond:
+            self.ca_cond_to_emb = nn.Linear(3, args.embed_dim)
         if self.args.design:
             self.x_d_to_emb = nn.Linear(20, args.embed_dim)
 
